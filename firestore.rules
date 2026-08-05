@@ -1,0 +1,49 @@
+rules_version = '2';
+
+// Craigaoke (spec §3). Each person owns and writes only their own library;
+// read access spans the allowlisted friend group. This is the inverse of a
+// shared-pool app: write your own, read across the group.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function verified() {
+      return request.auth != null && request.auth.token.email_verified == true;
+    }
+
+    // Membership is a pre-approved list of verified Google emails — no join
+    // code, no UID exchange. Edit /config/allowlist in the Firebase console.
+    function allowed() {
+      return verified() && get(/databases/$(database)/documents/config/allowlist)
+        .data.emails.hasAny([request.auth.token.email]);
+    }
+
+    match /config/allowlist {
+      // Any signed-in user may read it: the rejection screen has to be able to
+      // say "you're signed in as X, that address isn't on the list".
+      allow read: if verified();
+      allow write: if false;
+    }
+
+    match /users/{uid} {
+      allow read: if allowed();
+      allow create, update: if allowed() && request.auth.uid == uid;
+      allow delete: if false;
+    }
+
+    match /users/{uid}/songs/{songId} {
+      allow read: if allowed();
+      allow write: if allowed() && request.auth.uid == uid;
+    }
+
+    // Required separately for the collectionGroup('songs') query behind the
+    // EVERYONE search scope — a subcollection rule does not cover
+    // collection-group reads.
+    match /{path=**}/songs/{songId} {
+      allow read: if allowed();
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

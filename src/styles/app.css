@@ -1,0 +1,30 @@
+/* App-level styles on top of the Modernist design system (modernist.css). */
+html,
+body,
+#root {
+  height: 100%;
+}
+body {
+  margin: 0;
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
+}
+a {
+  color: var(--color-accent-700);
+}
+a:hover {
+  color: var(--color-accent-600);
+}
+.chips {
+  scrollbar-width: none;
+}
+.chips::-webkit-scrollbar {
+  display: none;
+}
+/* The play view runs on a dark ground so lyrics carry the screen. Interaction
+   states shift to the light end of the accent ramp there, per the design
+   system's dark-ground guidance. */
+.play-root {
+  background: #17150f;
+  color: #f3f2f2;
+}
