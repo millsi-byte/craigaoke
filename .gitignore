@@ -1,0 +1,24 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Firebase CLI local state / logs
+.firebase/
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
+*.log
+
+# Service account keys — NEVER commit these. The CI deploy reads the key from
+# the FIREBASE_SERVICE_ACCOUNT_CRAIGAOKE GitHub secret, not from a file.
+serviceAccount*.json
+*-service-account.json
+.env
+.env.*
+
+# Editor / OS cruft
+.DS_Store
+.vscode/
+.idea/

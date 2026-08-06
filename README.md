@@ -53,7 +53,7 @@ Without this, URL import just says "use the AI paste path instead" — everythin
 
 ### Step 4 — Publish
 
-This repo already publishes itself when code lands on `main` (see `.github/workflows/` once set up), exactly like your recipe app:
+This repo publishes itself when code lands on `main` — the workflow is [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml), which builds the SPA and deploys Hosting + Firestore rules together. Two one-time steps to arm it:
 
 1. Firebase console → Project settings → **Service accounts** → *Generate new private key*.
 2. In the GitHub repo → Settings → **Secrets and variables → Actions** → paste it as a secret named `FIREBASE_SERVICE_ACCOUNT_CRAIGAOKE`.
