@@ -1,22 +1,17 @@
-// Paste the Firebase web config here to switch the app from demo mode to the
-// real thing. Firebase console → Project settings → Your apps → the </> icon.
-//
-// These values are NOT secrets — access is enforced by firestore.rules.
-//
-// Leave it as null and the app runs in demo mode: sample songs, no sign-in,
-// changes reset on refresh. That's what makes it viewable before any setup.
-export const FIREBASE_CONFIG = null;
+// Import the functions you need from the SDKs you need
+import { initializeApp } from "firebase/app";
+// TODO: Add SDKs for Firebase products that you want to use
+// https://firebase.google.com/docs/web/setup#available-libraries
 
-// export const FIREBASE_CONFIG = {
-//   apiKey: '...',
-//   authDomain: 'craigaoke.firebaseapp.com',
-//   projectId: 'craigaoke',
-//   storageBucket: 'craigaoke.firebasestorage.app',
-//   messagingSenderId: '...',
-//   appId: '...',
-// };
+// Your web app's Firebase configuration
+const firebaseConfig = {
+  apiKey: "AIzaSyAd4RsUDrxvc4aKZRxXKJ6assbFAhzjn8Y",
+  authDomain: "craigaoke.firebaseapp.com",
+  projectId: "craigaoke",
+  storageBucket: "craigaoke.firebasestorage.app",
+  messagingSenderId: "251812051773",
+  appId: "1:251812051773:web:dc2e0be56bc046a4fca354"
+};
 
-// The Cloudflare Worker URL (worker/lyrics-import-worker.js), e.g.
-// 'https://craigaoke-import.something.workers.dev'. Without it, URL import
-// falls back to the AI paste path — everything else works.
-export const IMPORT_PROXY_URL = null;
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
