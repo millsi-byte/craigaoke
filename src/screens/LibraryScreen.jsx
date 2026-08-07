@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { SearchIcon, HeartIcon, PlayIcon } from '../components/icons.jsx';
+import { SearchIcon, HeartIcon, PlayIcon, ChevronDownIcon } from '../components/icons.jsx';
+import BandThumb from '../components/BandThumb.jsx';
 import { allTags, filterSongs, sortSongs, matchesQuery } from '../lib/songs.js';
 import { initialsOf } from '../lib/store.js';
 
@@ -37,16 +38,19 @@ function SongRow({ song, owner, onOpen, onPlay, onFavorite, onCopyIn }) {
     <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', borderBottom: '1px solid var(--color-divider)' }}>
       <button
         onClick={onOpen}
-        style={{ flex: 1, minWidth: 0, textAlign: 'left', border: 0, background: 'transparent', cursor: 'pointer', padding: 0, color: 'inherit' }}
+        style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 12, textAlign: 'left', border: 0, background: 'transparent', cursor: 'pointer', padding: 0, color: 'inherit' }}
       >
-        <div style={{ fontFamily: 'var(--font-heading)', fontWeight: 800, fontSize: 17, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-          {song.title}
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 2 }}>
-          <span style={{ fontSize: 13, color: 'var(--color-neutral-700)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            {song.artist || 'Unknown artist'}
-          </span>
-          {song.bpm ? <span style={{ fontSize: 11, color: 'var(--color-neutral-500)', fontVariantNumeric: 'tabular-nums' }}>· {song.bpm} BPM</span> : null}
+        <BandThumb artist={song.artist} size={52} />
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontFamily: 'var(--font-heading)', fontWeight: 800, fontSize: 17, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            {song.title}
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 2 }}>
+            <span style={{ fontSize: 13, color: 'var(--color-neutral-700)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {song.artist || 'Unknown artist'}
+            </span>
+            {song.bpm ? <span style={{ fontSize: 11, color: 'var(--color-neutral-500)', fontVariantNumeric: 'tabular-nums' }}>· {song.bpm} BPM</span> : null}
+          </div>
         </div>
       </button>
 
@@ -85,6 +89,7 @@ export default function LibraryScreen({ songs, onOpen, onPlay, onFavorite, onCop
   const [scope, setScope] = useState('mine'); // mine | everyone
   const [favoritesOnly, setFavoritesOnly] = useState(false);
   const [activeTags, setActiveTags] = useState([]);
+  const [tagsOpen, setTagsOpen] = useState(false);
   const [everyone, setEveryone] = useState(null);
   const [loadingEveryone, setLoadingEveryone] = useState(false);
 
@@ -143,10 +148,16 @@ export default function LibraryScreen({ songs, onOpen, onPlay, onFavorite, onCop
               <HeartIcon filled={favoritesOnly} size={13} /> FAVORITES
             </button>
           )}
+          {scope === 'mine' && tags.length > 0 && (
+            <button style={chip(tagsOpen || activeTags.length > 0)} onClick={() => setTagsOpen((v) => !v)}>
+              GENRES{activeTags.length ? ` · ${activeTags.length}` : ''}
+              <ChevronDownIcon size={13} style={{ transform: tagsOpen ? 'rotate(180deg)' : 'none' }} />
+            </button>
+          )}
         </div>
 
-        {scope === 'mine' && tags.length > 0 && (
-          <div className="chips" style={{ display: 'flex', gap: 8, marginTop: 8, overflowX: 'auto' }}>
+        {scope === 'mine' && tagsOpen && tags.length > 0 && (
+          <div className="chips" style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
             {tags.map((t) => (
               <button key={t} style={chip(activeTags.includes(t))} onClick={() => setActiveTags((a) => (a.includes(t) ? a.filter((x) => x !== t) : a.concat([t])))}>
                 {t}

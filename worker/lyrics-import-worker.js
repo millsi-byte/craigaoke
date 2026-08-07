@@ -279,6 +279,24 @@ async function suggest(artistsParam, origin) {
   return json({ suggestions: out }, origin);
 }
 
+// Artist photo for the library/artist cards, via Deezer's free, no-key API.
+// Returns a hotlinkable CDN image URL (no storage on our side, spec §1) or null.
+async function artistImage(name, origin) {
+  const q = (name || '').trim();
+  if (!q) return json({ image: null }, origin);
+  try {
+    const u = 'https://api.deezer.com/search/artist?limit=1&q=' + encodeURIComponent(q);
+    const res = await fetch(u, { cf: { cacheTtl: 604800 } });
+    if (!res.ok) return json({ image: null }, origin);
+    const data = await res.json().catch(() => ({}));
+    const a = Array.isArray(data.data) ? data.data[0] : null;
+    const image = a ? a.picture_medium || a.picture_big || a.picture || null : null;
+    return json({ image }, origin);
+  } catch {
+    return json({ image: null }, origin);
+  }
+}
+
 export default {
   async fetch(request, env) {
     const origin = request.headers.get('Origin') || '';
@@ -290,6 +308,9 @@ export default {
     }
     if (url.pathname === '/suggest') {
       return suggest(url.searchParams.get('artists') || '', origin);
+    }
+    if (url.pathname === '/artist-image') {
+      return artistImage(url.searchParams.get('name') || '', origin);
     }
     return importLyrics(url.searchParams.get('url') || '', origin);
   },
