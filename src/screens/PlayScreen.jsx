@@ -10,13 +10,15 @@ const BPM_STEP = 2; // ± per tap
 // The teleprompter (spec §7.4): full screen, screen kept awake, a tempo-driven
 // scroll, and both ways to pause.
 //
-// The tempo is the single dial. Adjusting speed changes the BPM, which drives
-// both the scroll rate and the on-screen beat pulse together — so speeding up
-// makes the words and the pulse move as one. A hand-tuned BPM saves back to the
-// song on exit. The beat is shown, not heard: a silent 4-beat count-in and then
-// a marker that pulses to the BPM the whole song, including coming off pause.
+// Tempo is the single dial. Adjusting speed changes the BPM, which drives both
+// the scroll and the on-screen beat pulse together. A live tempo is a session
+// change until you tap SET AS DEFAULT, which saves it as the song's play tempo;
+// a published (looked-up) tempo is shown alongside for reference. The beat is
+// shown, not heard: a silent count-in on first play, then a marker that pulses
+// to the BPM. Resuming from pause starts immediately — no count-in.
 export default function PlayScreen({ song, onExit, onCalibrate }) {
   const [bpm, setBpm] = useState(clampBpm(song.bpm || 100)); // Play always has a tempo
+  const [savedBpm, setSavedBpm] = useState(clampBpm(song.bpm || 100)); // the song's stored default
   const [phase, setPhase] = useState('countin'); // countin | playing | paused | done
   const [count, setCount] = useState(0);
   const [pulse, setPulse] = useState(0); // bumped on every beat to re-trigger the flash
@@ -38,19 +40,10 @@ export default function PlayScreen({ song, onExit, onCalibrate }) {
   const beatMs = 60000 / bpm;
   const pulseMs = Math.min(Math.round(beatMs * 0.8), 300);
   const lines = lyricLines(song.lyrics);
+  const changed = bpm !== savedBpm;
 
   // Keep the screen awake for the whole session.
   useEffect(() => acquireWakeLock(), []);
-
-  // Save a hand-tuned tempo back to the song on the way out.
-  useEffect(
-    () => () => {
-      if (onCalibrate && bpmRef.current !== clampBpm(song.bpm || 100)) {
-        onCalibrate(song.id, { bpm: bpmRef.current, bpmSource: 'manual' });
-      }
-    },
-    [] // eslint-disable-line react-hooks/exhaustive-deps
-  );
 
   const measure = () => {
     const view = viewRef.current;
@@ -82,12 +75,13 @@ export default function PlayScreen({ song, onExit, onCalibrate }) {
 
   const beginScroll = () => {
     lastTsRef.current = 0;
+    setPhase('playing');
+    phaseRef.current = 'playing';
     rafRef.current = requestAnimationFrame(tick);
   };
 
   // Silent visual count-in: four beats at the current tempo (1-2-3-4 pulsing on
-  // screen), then start scrolling. Used on first play and on every resume, so
-  // coming off pause is a visual count-in with no sound.
+  // screen), then start scrolling. Used on first play only.
   const runCountIn = () => {
     clearInterval(countinRef.current);
     cancelAnimationFrame(rafRef.current);
@@ -103,8 +97,6 @@ export default function PlayScreen({ song, onExit, onCalibrate }) {
       if (n >= 5) {
         clearInterval(countinRef.current);
         countinRef.current = 0;
-        setPhase('playing');
-        phaseRef.current = 'playing';
         beginScroll();
       }
     };
@@ -134,7 +126,11 @@ export default function PlayScreen({ song, onExit, onCalibrate }) {
     setPhase('paused');
     phaseRef.current = 'paused';
   };
-  const resume = () => runCountIn();
+  // Resume picks up right where it left off — no count-in (tap and play).
+  const resume = () => {
+    if (phaseRef.current !== 'paused') return;
+    beginScroll();
+  };
   const restart = () => {
     yRef.current = 0;
     apply();
@@ -142,6 +138,10 @@ export default function PlayScreen({ song, onExit, onCalibrate }) {
   };
 
   const nudge = (delta) => setBpm((v) => clampBpm(v + delta));
+  const saveDefault = () => {
+    if (onCalibrate) onCalibrate(song.id, { bpm, bpmSource: 'manual' });
+    setSavedBpm(bpm);
+  };
 
   return (
     <div className="play-root" style={{ position: 'fixed', inset: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
@@ -207,7 +207,7 @@ export default function PlayScreen({ song, onExit, onCalibrate }) {
           <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', zIndex: 4, background: 'rgba(23,21,15,0.55)' }}>
             <div style={{ textAlign: 'center' }}>
               <div style={{ fontFamily: 'var(--font-heading)', fontWeight: 800, fontSize: 20, letterSpacing: '0.1em' }}>PAUSED</div>
-              <div style={{ fontSize: 13, color: 'rgba(243,242,242,0.6)', marginTop: 6 }}>Tap anywhere to count back in</div>
+              <div style={{ fontSize: 13, color: 'rgba(243,242,242,0.6)', marginTop: 6 }}>Tap anywhere to resume</div>
             </div>
           </div>
         )}
@@ -223,22 +223,37 @@ export default function PlayScreen({ song, onExit, onCalibrate }) {
         )}
       </div>
 
-      {/* bottom controls: persistent pause + tempo (BPM) */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px calc(12px + env(safe-area-inset-bottom)) 16px', zIndex: 3 }}>
-        <button
-          onClick={() => (phase === 'playing' ? pause() : resume())}
-          aria-label={phase === 'playing' ? 'Pause' : 'Play'}
-          style={{ width: 56, height: 56, border: 0, background: 'var(--color-accent)', color: '#fff', cursor: 'pointer', display: 'grid', placeItems: 'center' }}
-        >
-          {phase === 'playing' ? <PauseIcon size={22} /> : <PlayIcon size={20} />}
-        </button>
-        <div style={{ flex: 1 }} />
-        <span style={{ fontSize: 11, letterSpacing: '0.1em', color: 'rgba(243,242,242,0.5)' }}>TEMPO</span>
-        <button onClick={() => nudge(-BPM_STEP)} aria-label="Slower" style={{ width: 48, height: 48, border: '1px solid rgba(243,242,242,0.3)', background: 'transparent', color: '#f3f2f2', cursor: 'pointer', fontSize: 22, fontFamily: 'var(--font-heading)' }}>–</button>
-        <span aria-live="polite" style={{ minWidth: 78, textAlign: 'center', fontSize: 15, fontWeight: 700, fontFamily: 'var(--font-heading)', color: '#f3f2f2', fontVariantNumeric: 'tabular-nums' }}>
-          {bpm} BPM
-        </span>
-        <button onClick={() => nudge(BPM_STEP)} aria-label="Faster" style={{ width: 48, height: 48, border: '1px solid rgba(243,242,242,0.3)', background: 'transparent', color: '#f3f2f2', cursor: 'pointer', fontSize: 22, fontFamily: 'var(--font-heading)' }}>+</button>
+      {/* bottom controls: reference tempo + save, then pause + tempo dial */}
+      <div style={{ padding: '10px 16px calc(12px + env(safe-area-inset-bottom)) 16px', zIndex: 3 }}>
+        {(changed || (song.publishedBpm && song.publishedBpm !== bpm)) && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, minHeight: 40, marginBottom: 8 }}>
+            {song.publishedBpm ? (
+              <span style={{ fontSize: 12, color: 'rgba(243,242,242,0.55)' }}>Published {song.publishedBpm} BPM</span>
+            ) : null}
+            <div style={{ flex: 1 }} />
+            {changed && (
+              <button className="btn btn-secondary" onClick={saveDefault} style={{ minHeight: 40, padding: '0 16px', fontSize: 12, color: '#f3f2f2', borderColor: 'rgba(243,242,242,0.4)' }}>
+                SET {bpm} AS DEFAULT
+              </button>
+            )}
+          </div>
+        )}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <button
+            onClick={() => (phase === 'playing' ? pause() : resume())}
+            aria-label={phase === 'playing' ? 'Pause' : 'Play'}
+            style={{ width: 56, height: 56, border: 0, background: 'var(--color-accent)', color: '#fff', cursor: 'pointer', display: 'grid', placeItems: 'center' }}
+          >
+            {phase === 'playing' ? <PauseIcon size={22} /> : <PlayIcon size={20} />}
+          </button>
+          <div style={{ flex: 1 }} />
+          <span style={{ fontSize: 11, letterSpacing: '0.1em', color: 'rgba(243,242,242,0.5)' }}>TEMPO</span>
+          <button onClick={() => nudge(-BPM_STEP)} aria-label="Slower" style={{ width: 48, height: 48, border: '1px solid rgba(243,242,242,0.3)', background: 'transparent', color: '#f3f2f2', cursor: 'pointer', fontSize: 22, fontFamily: 'var(--font-heading)' }}>–</button>
+          <span aria-live="polite" style={{ minWidth: 78, textAlign: 'center', fontSize: 15, fontWeight: 700, fontFamily: 'var(--font-heading)', color: '#f3f2f2', fontVariantNumeric: 'tabular-nums' }}>
+            {bpm} BPM
+          </span>
+          <button onClick={() => nudge(BPM_STEP)} aria-label="Faster" style={{ width: 48, height: 48, border: '1px solid rgba(243,242,242,0.3)', background: 'transparent', color: '#f3f2f2', cursor: 'pointer', fontSize: 22, fontFamily: 'var(--font-heading)' }}>+</button>
+        </div>
       </div>
     </div>
   );

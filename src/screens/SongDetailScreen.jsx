@@ -28,7 +28,9 @@ function TempoPanel({ song, onChange }) {
     setLooking(false);
     if (res.error) setLookMsg(res.error);
     else {
-      onChange({ bpm: res.bpm, bpmSource: 'getsongbpm' });
+      // Store the looked-up tempo as the published reference, and offer it as
+      // the play tempo too (a suggestion he can then adjust).
+      onChange({ bpm: res.bpm, bpmSource: 'getsongbpm', publishedBpm: res.bpm });
       setLookMsg(`Found ${res.bpm} BPM — adjust if it doesn’t match how you play it.`);
     }
   };
@@ -62,6 +64,12 @@ function TempoPanel({ song, onChange }) {
         </span>
       </div>
       {lookMsg && <p style={{ margin: '8px 0 0 0', fontSize: 12, color: 'var(--color-neutral-700)' }}>{lookMsg}</p>}
+      {song.publishedBpm && song.publishedBpm !== song.bpm && (
+        <p style={{ margin: '8px 0 0 0', fontSize: 12, color: 'var(--color-neutral-600)' }}>
+          Published tempo <strong>{song.publishedBpm} BPM</strong>
+          {song.bpm ? <> · you play it at <strong>{song.bpm} BPM</strong></> : null}
+        </p>
+      )}
     </div>
   );
 }
