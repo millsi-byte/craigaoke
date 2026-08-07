@@ -195,13 +195,16 @@ export default function LibraryScreen({ songs, onOpen, onPreview, onPlay, onFavo
               <HeartIcon filled={favoritesOnly} size={13} /> FAVORITES
             </button>
           )}
-          {scope === 'mine' && tags.length > 0 && (
+        </div>
+
+        {scope === 'mine' && tags.length > 0 && (
+          <div style={{ marginTop: 8 }}>
             <button style={chip(tagsOpen || activeTags.length > 0)} onClick={() => setTagsOpen((v) => !v)}>
               GENRES{activeTags.length ? ` · ${activeTags.length}` : ''}
               <ChevronDownIcon size={13} style={{ transform: tagsOpen ? 'rotate(180deg)' : 'none' }} />
             </button>
-          )}
-        </div>
+          </div>
+        )}
 
         {scope === 'mine' && tagsOpen && tags.length > 0 && (
           <div className="chips" style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
