@@ -1,7 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { XIcon, PlayIcon, PauseIcon, MetronomeIcon } from '../components/icons.jsx';
-import { isSectionHeader, lyricLines } from '../lib/songs.js';
-import { lineHasChords } from '../lib/chords.js';
+import { lyricRows } from '../lib/chords.js';
 import ChordLine from '../components/ChordLine.jsx';
 import { acquireWakeLock, clampBpm, DEFAULT_LINES_PER_BEAT, pixelsPerSecond } from '../lib/tempo.js';
 
@@ -78,7 +77,7 @@ export default function PlayScreen({ song, onExit, onCalibrate }) {
 
   const beatMs = 60000 / bpm;
   const pulseMs = Math.min(Math.round(beatMs * 0.8), 300);
-  const lines = lyricLines(song.lyrics);
+  const rows = lyricRows(song.lyrics);
   const changed = bpm !== savedBpm;
 
   // Keep the screen awake for the whole session.
@@ -222,22 +221,31 @@ export default function PlayScreen({ song, onExit, onCalibrate }) {
           ref={contentRef}
           style={{ position: 'absolute', top: 0, left: 0, right: 0, paddingTop: `${READ_FRACTION * 100}%`, paddingBottom: '60vh', willChange: 'transform' }}
         >
-          {lines.map((line, i) =>
-            lineHasChords(line) ? (
+          {rows.map((row, i) =>
+            row.type === 'pair' ? (
+              <div key={i} style={{ padding: '8px 24px', overflowX: 'auto' }}>
+                <div style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', whiteSpace: 'pre', lineHeight: 1.25 }}>
+                  <div style={{ color: 'var(--color-accent)', fontWeight: 800, fontSize: 22 }}>{row.chords}</div>
+                  {row.lyric ? <div style={{ fontSize: 26 }}>{row.lyric}</div> : null}
+                </div>
+              </div>
+            ) : row.type === 'inline' ? (
               <div key={i} style={{ minHeight: LINE_PX, display: 'flex', alignItems: 'center', padding: '8px 24px' }}>
                 <ChordLine
-                  line={line}
+                  line={row.line}
                   chordStyle={{ fontSize: 18, fontWeight: 800, color: 'var(--color-accent)', fontFamily: 'var(--font-heading)', lineHeight: 1.1 }}
                   wordStyle={{ fontSize: 34, lineHeight: 1.15, fontWeight: 600, fontFamily: 'var(--font-heading)', letterSpacing: '-0.01em' }}
                 />
               </div>
-            ) : isSectionHeader(line) ? (
+            ) : row.type === 'section' ? (
               <div key={i} style={{ height: LINE_PX, display: 'flex', alignItems: 'center', padding: '0 24px', fontSize: 15, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(243,242,242,0.4)', fontWeight: 600, fontFamily: 'var(--font-heading)' }}>
-                {line.replace(/^[[(]|[\])]$/g, '')}
+                {row.line.replace(/^[[(]|[\])]$/g, '')}
               </div>
+            ) : row.type === 'blank' ? (
+              <div key={i} style={{ height: LINE_PX / 2 }} />
             ) : (
               <div key={i} style={{ minHeight: LINE_PX, display: 'flex', alignItems: 'center', padding: '0 24px', fontSize: 34, lineHeight: 1.3, fontWeight: 600, fontFamily: 'var(--font-heading)', letterSpacing: '-0.01em' }}>
-                {line}
+                {row.line}
               </div>
             )
           )}

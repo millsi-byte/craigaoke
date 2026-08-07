@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import { BackIcon, HeartIcon, PlayIcon, ExternalIcon, MetronomeIcon } from '../components/icons.jsx';
-import { isSectionHeader, lyricLines, lyricLineCount } from '../lib/songs.js';
-import { lineHasChords } from '../lib/chords.js';
+import { lyricLineCount } from '../lib/songs.js';
+import { lyricRows } from '../lib/chords.js';
 import ChordLine from '../components/ChordLine.jsx';
 import { bpmFromTaps, clampBpm } from '../lib/tempo.js';
 import { lookupBpm } from '../lib/importer.js';
@@ -145,23 +145,30 @@ export default function SongDetailScreen({ song, onBack, onPlay, onEdit, onDelet
           Lyrics · {lineCount} lines
         </div>
         <div style={{ fontSize: 16, lineHeight: 1.7 }}>
-          {lyricLines(song.lyrics).map((line, i) =>
-            lineHasChords(line) ? (
+          {lyricRows(song.lyrics).map((row, i) =>
+            row.type === 'pair' ? (
+              <div key={i} style={{ overflowX: 'auto', margin: '6px 0' }}>
+                <div style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', whiteSpace: 'pre', lineHeight: 1.3, fontSize: 14 }}>
+                  <div style={{ color: 'var(--color-accent)', fontWeight: 700 }}>{row.chords}</div>
+                  {row.lyric ? <div>{row.lyric}</div> : null}
+                </div>
+              </div>
+            ) : row.type === 'inline' ? (
               <div key={i} style={{ margin: '6px 0' }}>
                 <ChordLine
-                  line={line}
+                  line={row.line}
                   chordStyle={{ fontSize: 12, fontWeight: 700, color: 'var(--color-accent)', lineHeight: 1.1 }}
                   wordStyle={{ lineHeight: 1.2 }}
                 />
               </div>
-            ) : isSectionHeader(line) ? (
+            ) : row.type === 'section' ? (
               <div key={i} style={{ fontSize: 12, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--color-neutral-600)', fontWeight: 600, margin: '16px 0 6px 0' }}>
-                {line.replace(/^[[(]|[\])]$/g, '')}
+                {row.line.replace(/^[[(]|[\])]$/g, '')}
               </div>
-            ) : line.trim() === '' ? (
+            ) : row.type === 'blank' ? (
               <div key={i} style={{ height: 12 }} />
             ) : (
-              <div key={i}>{line}</div>
+              <div key={i}>{row.line}</div>
             )
           )}
         </div>
