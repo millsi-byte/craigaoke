@@ -81,6 +81,21 @@ export async function lookupBpm(artist, title) {
   }
 }
 
+// Weekly suggestions (Add screen): popular tracks by the library's artists,
+// via the Worker's Deezer-backed /suggest route. Metadata only — no lyrics.
+export async function fetchSuggestions(artists) {
+  if (!IMPORT_PROXY_URL || !Array.isArray(artists) || !artists.length) return [];
+  try {
+    const res = await fetch(
+      IMPORT_PROXY_URL.replace(/\/$/, '') + '/suggest?artists=' + encodeURIComponent(artists.join(','))
+    );
+    const data = await res.json();
+    return Array.isArray(data.suggestions) ? data.suggestions : [];
+  } catch {
+    return [];
+  }
+}
+
 // Path C: the universal fallback. Works with any AI chat, costs nothing.
 export const AI_PROMPT = `You are helping me put song lyrics into my personal lyrics app.
 

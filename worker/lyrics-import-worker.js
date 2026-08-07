@@ -241,6 +241,44 @@ async function lookupBpm(artist, title, origin, env) {
   }
 }
 
+// Weekly "songs you might like" (in-app Add screen): popular tracks by the
+// artists already in the library, via Deezer's free, no-key API. Metadata only
+// — titles and artists, never lyrics (that stays the user's own capture, §11).
+async function suggest(artistsParam, origin) {
+  const artists = (artistsParam || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .slice(0, 5);
+  if (!artists.length) return json({ suggestions: [] }, origin);
+
+  const out = [];
+  const seen = new Set();
+  for (const artist of artists) {
+    try {
+      const u =
+        'https://api.deezer.com/search?limit=8&order=RANKING&q=' +
+        encodeURIComponent('artist:"' + artist + '"');
+      const res = await fetch(u, { cf: { cacheTtl: 86400 } });
+      if (!res.ok) continue;
+      const data = await res.json().catch(() => ({}));
+      const tracks = Array.isArray(data.data) ? data.data : [];
+      for (const tr of tracks) {
+        const title = (tr && (tr.title_short || tr.title)) || '';
+        const name = (tr && tr.artist && tr.artist.name) || artist;
+        if (!title) continue;
+        const key = (name + '|' + title).toLowerCase();
+        if (seen.has(key)) continue;
+        seen.add(key);
+        out.push({ artist: name, title });
+      }
+    } catch {
+      /* skip this artist, keep going */
+    }
+  }
+  return json({ suggestions: out }, origin);
+}
+
 export default {
   async fetch(request, env) {
     const origin = request.headers.get('Origin') || '';
@@ -249,6 +287,9 @@ export default {
     const url = new URL(request.url);
     if (url.pathname === '/bpm') {
       return lookupBpm(url.searchParams.get('artist'), url.searchParams.get('title'), origin, env);
+    }
+    if (url.pathname === '/suggest') {
+      return suggest(url.searchParams.get('artists') || '', origin);
     }
     return importLyrics(url.searchParams.get('url') || '', origin);
   },
