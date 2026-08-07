@@ -30,6 +30,7 @@ export default function PlayScreen({ song, onExit, onCalibrate }) {
   const lastTsRef = useRef(0);
   const lpbRef = useRef(lpb);
   lpbRef.current = lpb;
+  const baseLpbRef = useRef(song.linesPerBeat || DEFAULT_LINES_PER_BEAT); // 100% reference for the readout
   const phaseRef = useRef('countin');
   phaseRef.current = phase;
   const beatTimerRef = useRef(0);
@@ -236,6 +237,9 @@ export default function PlayScreen({ song, onExit, onCalibrate }) {
         <div style={{ flex: 1 }} />
         <span style={{ fontSize: 11, letterSpacing: '0.1em', color: 'rgba(243,242,242,0.5)' }}>SPEED</span>
         <button onClick={() => nudge(-0.04)} aria-label="Slower" style={{ width: 48, height: 48, border: '1px solid rgba(243,242,242,0.3)', background: 'transparent', color: '#f3f2f2', cursor: 'pointer', fontSize: 22, fontFamily: 'var(--font-heading)' }}>–</button>
+        <span aria-live="polite" style={{ minWidth: 54, textAlign: 'center', fontSize: 15, fontWeight: 700, fontFamily: 'var(--font-heading)', color: '#f3f2f2', fontVariantNumeric: 'tabular-nums' }}>
+          {Math.round((lpb / baseLpbRef.current) * 100)}%
+        </span>
         <button onClick={() => nudge(0.04)} aria-label="Faster" style={{ width: 48, height: 48, border: '1px solid rgba(243,242,242,0.3)', background: 'transparent', color: '#f3f2f2', cursor: 'pointer', fontSize: 22, fontFamily: 'var(--font-heading)' }}>+</button>
       </div>
     </div>
