@@ -118,15 +118,24 @@ function relaxedJsonParse(body) {
   } catch {
     /* fall through to repair */
   }
-  const repaired = body
-    // curly / typographic double quotes → straight "
-    .replace(/[“”„‟″‶]/g, '"')
+  let s = body;
+  // When the reply uses typographic (curly) double quotes for its structure,
+  // any straight " must be content — e.g. quoted speech inside the lyrics
+  // ("Come sit beside me..."). Escape those content quotes FIRST, then promote
+  // the curly quotes to real JSON delimiters. Order matters: doing it the other
+  // way round (the naive "turn every curly into a straight quote") makes the
+  // inner quotes collide with the string boundaries and the parse still fails.
+  if (/[“”]/.test(s)) {
+    s = s.replace(/\\?"/g, (m) => (m === '"' ? '\\"' : m)); // escape unescaped straight "
+    s = s.replace(/[“”„‟″‶]/g, '"'); // curly/typographic doubles → real delimiters
+  }
+  s = s
     // curly single quotes / apostrophes → straight ' (safe inside JSON strings)
     .replace(/[‘’‚‛′‵]/g, "'")
     // trailing comma before a closing } or ]
     .replace(/,(\s*[}\]])/g, '$1');
   try {
-    return JSON.parse(repaired);
+    return JSON.parse(s);
   } catch {
     return null;
   }
