@@ -11,6 +11,13 @@
   </head>
   <body>
     <div id="root"></div>
+    <!-- GetSongBPM's free tier requires a backlink present in the page's SOURCE
+         HTML — its validator reads the raw HTML and can't run the React app, so
+         this static link must live here (the app also renders a visible credit
+         on the sign-in screen once loaded). Kept outside #root so React never
+         overwrites it. -->
+    <a href="https://getsongbpm.com" rel="noopener"
+       style="position:fixed;left:8px;bottom:6px;z-index:0;font:11px system-ui,sans-serif;color:var(--color-neutral-500,#8a8a8a);text-decoration:underline;">Tempo data by GetSongBPM</a>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>
