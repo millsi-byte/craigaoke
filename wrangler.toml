@@ -9,7 +9,7 @@
 #
 # The GetSongBPM key (optional, for automatic tempo) is added later as a Worker
 # secret in the dashboard — Settings → Variables → GETSONGBPM_KEY — never here.
-name = "craigaoke-import"
+name = "craigaoke"
 main = "worker/lyrics-import-worker.js"
 compatibility_date = "2024-11-01"
 workers_dev = true
