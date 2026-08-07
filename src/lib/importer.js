@@ -111,6 +111,19 @@ export async function fetchArtistImage(name) {
   }
 }
 
+// A genre for the artist (auto-tagging on import), via the Worker. Null if
+// unknown or the worker is unavailable.
+export async function fetchGenre(artist) {
+  if (!IMPORT_PROXY_URL || !artist) return null;
+  try {
+    const res = await fetch(IMPORT_PROXY_URL.replace(/\/$/, '') + '/genre?artist=' + encodeURIComponent(artist));
+    const data = await res.json();
+    return data && data.genre ? data.genre : null;
+  } catch {
+    return null;
+  }
+}
+
 // Path C: the universal fallback. Works with any AI chat, costs nothing.
 export const AI_PROMPT = `You are helping me put song lyrics into my personal lyrics app.
 

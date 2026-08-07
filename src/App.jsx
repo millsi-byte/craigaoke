@@ -10,7 +10,7 @@ import PlayScreen from './screens/PlayScreen.jsx';
 import SettingsScreen from './screens/SettingsScreen.jsx';
 import { useAppStore } from './lib/store.js';
 import { allTags } from './lib/songs.js';
-import { importFromUrl, sharedUrlFromLocation } from './lib/importer.js';
+import { fetchGenre, importFromUrl, sharedUrlFromLocation } from './lib/importer.js';
 
 const shell = {
   display: 'flex',
@@ -113,10 +113,21 @@ export default function App() {
   }
   const play = (id) => setPlayingId(id);
 
-  const saveDraft = (song) => {
+  const saveDraft = async (song) => {
     const existing = songs.some((s) => s.id === song.id);
-    if (existing) api.updateSong(song.id, song);
-    else api.addSong(song);
+    if (existing) {
+      api.updateSong(song.id, song);
+    } else {
+      await api.addSong(song);
+      // Auto-tag the genre from the artist (fire and forget; non-destructive).
+      if (song.artist) {
+        fetchGenre(song.artist).then((g) => {
+          if (g && !(song.tags || []).some((t) => t.toLowerCase() === g.toLowerCase())) {
+            api.updateSong(song.id, { tags: (song.tags || []).concat([g]) });
+          }
+        });
+      }
+    }
     setDraft(null);
     setSelectedId(song.id);
     setScreen('detail');

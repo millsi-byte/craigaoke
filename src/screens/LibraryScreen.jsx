@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { SearchIcon, HeartIcon, PlayIcon, ChevronDownIcon } from '../components/icons.jsx';
+import { SearchIcon, HeartIcon, PlayIcon, ChevronDownIcon, GridIcon, ListIcon } from '../components/icons.jsx';
 import BandThumb from '../components/BandThumb.jsx';
 import { allTags, filterSongs, sortSongs, matchesQuery } from '../lib/songs.js';
 
@@ -75,6 +75,45 @@ function SongRow({ song, owner, onOpen, onPlay, onFavorite, onCopyIn }) {
   );
 }
 
+function SongCard({ song, owner, onOpen, onPlay, onFavorite, onCopyIn }) {
+  const foreign = owner && !owner.mine;
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', border: '1px solid var(--color-divider)', minWidth: 0 }}>
+      <button onClick={onOpen} style={{ border: 0, background: 'transparent', padding: 0, cursor: 'pointer', color: 'inherit', textAlign: 'left' }}>
+        <BandThumb artist={song.artist} fill />
+        <div style={{ padding: '10px 10px 6px 10px' }}>
+          <div style={{ fontFamily: 'var(--font-heading)', fontWeight: 800, fontSize: 15, lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            {song.title}
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--color-neutral-600)', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            {song.artist || 'Unknown artist'}{song.bpm ? ` · ${song.bpm} BPM` : ''}
+          </div>
+          {foreign && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: 'var(--color-neutral-600)', marginTop: 3 }}>
+              <span style={{ width: 8, height: 8, flex: 'none', background: owner.color || 'var(--color-neutral-500)' }} />
+              {owner.name}
+            </div>
+          )}
+        </div>
+      </button>
+      <div style={{ display: 'flex', gap: 6, padding: '2px 10px 10px 10px', marginTop: 'auto' }}>
+        {foreign ? (
+          <button className="btn btn-secondary" onClick={onCopyIn} style={{ flex: 1, minHeight: 36, fontSize: 11 }}>ADD TO MINE</button>
+        ) : (
+          <>
+            <button onClick={onFavorite} aria-label={song.favorite ? 'Unfavorite' : 'Favorite'} style={{ width: 36, height: 36, border: '1px solid var(--color-divider)', background: 'transparent', cursor: 'pointer', display: 'grid', placeItems: 'center', color: song.favorite ? 'var(--color-accent)' : 'var(--color-neutral-500)' }}>
+              <HeartIcon filled={song.favorite} size={16} />
+            </button>
+            <button className="btn btn-primary" onClick={onPlay} aria-label="Play" style={{ flex: 1, minHeight: 36, display: 'grid', placeItems: 'center' }}>
+              <PlayIcon size={13} />
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function LibraryScreen({ songs, onOpen, onPreview, onPlay, onFavorite, onCopyIn, artistFilter, onClearArtist }) {
   const [query, setQuery] = useState('');
   const [scope, setScope] = useState('mine'); // mine | everyone
@@ -83,6 +122,13 @@ export default function LibraryScreen({ songs, onOpen, onPreview, onPlay, onFavo
   const [tagsOpen, setTagsOpen] = useState(false);
   const [everyone, setEveryone] = useState(null);
   const [loadingEveryone, setLoadingEveryone] = useState(false);
+  const [view, setView] = useState(() => {
+    try { return localStorage.getItem('craigaoke.view') || 'list'; } catch { return 'list'; }
+  });
+  const changeView = (v) => {
+    setView(v);
+    try { localStorage.setItem('craigaoke.view', v); } catch { /* private mode */ }
+  };
 
   useEffect(() => {
     if (scope !== 'everyone') return;
@@ -108,15 +154,25 @@ export default function LibraryScreen({ songs, onOpen, onPreview, onPlay, onFavo
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
       <header style={{ padding: '14px 16px 12px 16px', borderBottom: '2px solid var(--color-divider)' }}>
-        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
-          <h1 style={{ margin: 0, fontSize: 24, letterSpacing: '-0.01em' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+          <h1 style={{ margin: 0, fontSize: 24, letterSpacing: '-0.01em', minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
             {artistFilter || 'Library'}
           </h1>
-          {artistFilter && (
-            <button className="btn btn-ghost" onClick={onClearArtist} style={{ minHeight: 32, fontSize: 12 }}>
-              CLEAR
-            </button>
-          )}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 'none' }}>
+            {artistFilter && (
+              <button className="btn btn-ghost" onClick={onClearArtist} style={{ minHeight: 32, fontSize: 12 }}>
+                CLEAR
+              </button>
+            )}
+            <div style={{ display: 'inline-flex', border: '1px solid var(--color-divider)' }}>
+              <button aria-label="Grid view" onClick={() => changeView('grid')} style={{ width: 38, height: 34, border: 0, borderRight: '1px solid var(--color-divider)', background: view === 'grid' ? 'var(--color-accent)' : 'transparent', color: view === 'grid' ? 'var(--color-bg)' : 'var(--color-text)', display: 'grid', placeItems: 'center', cursor: 'pointer' }}>
+                <GridIcon size={16} />
+              </button>
+              <button aria-label="List view" onClick={() => changeView('list')} style={{ width: 38, height: 34, border: 0, background: view === 'list' ? 'var(--color-accent)' : 'transparent', color: view === 'list' ? 'var(--color-bg)' : 'var(--color-text)', display: 'grid', placeItems: 'center', cursor: 'pointer' }}>
+                <ListIcon size={16} />
+              </button>
+            </div>
+          </div>
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, border: '1px solid var(--color-divider)', padding: '0 12px', marginTop: 12 }}>
@@ -162,6 +218,12 @@ export default function LibraryScreen({ songs, onOpen, onPreview, onPlay, onFavo
         {scope === 'mine' ? (
           mineFiltered.length === 0 ? (
             <Empty text={songs.length ? 'No songs match.' : 'Your library is empty. Tap ADD to bring in a song.'} />
+          ) : view === 'grid' ? (
+            <div style={gridWrap}>
+              {mineFiltered.map((s) => (
+                <SongCard key={s.id} song={s} owner={{ mine: true }} onOpen={() => onOpen(s.id)} onPlay={() => onPlay(s.id)} onFavorite={() => onFavorite(s.id)} />
+              ))}
+            </div>
           ) : (
             mineFiltered.map((s) => (
               <SongRow key={s.id} song={s} owner={{ mine: true }} onOpen={() => onOpen(s.id)} onPlay={() => onPlay(s.id)} onFavorite={() => onFavorite(s.id)} />
@@ -171,6 +233,20 @@ export default function LibraryScreen({ songs, onOpen, onPreview, onPlay, onFavo
           <Empty text="Loading everyone’s songs…" />
         ) : everyoneFiltered.length === 0 ? (
           <Empty text="Nothing found across the group." />
+        ) : view === 'grid' ? (
+          <div style={gridWrap}>
+            {everyoneFiltered.map(({ song, owner }) => (
+              <SongCard
+                key={owner.uid + '/' + song.id}
+                song={song}
+                owner={owner}
+                onOpen={() => (owner.mine ? onOpen(song.id) : onPreview(song, owner))}
+                onPlay={() => onPlay(song.id)}
+                onFavorite={() => onFavorite(song.id)}
+                onCopyIn={() => onCopyIn.copy(song, owner.name)}
+              />
+            ))}
+          </div>
         ) : (
           everyoneFiltered.map(({ song, owner }) => (
             <SongRow
@@ -188,6 +264,8 @@ export default function LibraryScreen({ songs, onOpen, onPreview, onPlay, onFavo
     </div>
   );
 }
+
+const gridWrap = { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, padding: 12 };
 
 const Empty = ({ text }) => (
   <div style={{ padding: '48px 24px', textAlign: 'center', color: 'var(--color-neutral-600)', fontSize: 15 }}>{text}</div>
