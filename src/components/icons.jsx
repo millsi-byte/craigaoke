@@ -82,6 +82,12 @@ export const ClipboardIcon = (props) => (
   </svg>
 );
 
+export const ChevronDownIcon = ({ size = 16, ...props }) => (
+  <svg width={size} height={size} {...base} {...props}>
+    <polyline points="6 9 12 15 18 9" />
+  </svg>
+);
+
 export const MetronomeIcon = (props) => (
   <svg width="18" height="18" {...base} {...props}>
     <path d="M12 2 7 20h10L12 2z" />

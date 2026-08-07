@@ -96,6 +96,21 @@ export async function fetchSuggestions(artists) {
   }
 }
 
+// Artist photo (library/artist cards), via the Worker's Deezer-backed route.
+// Returns a hotlinkable image URL or null.
+export async function fetchArtistImage(name) {
+  if (!IMPORT_PROXY_URL || !name) return null;
+  try {
+    const res = await fetch(
+      IMPORT_PROXY_URL.replace(/\/$/, '') + '/artist-image?name=' + encodeURIComponent(name)
+    );
+    const data = await res.json();
+    return data && data.image ? data.image : null;
+  } catch {
+    return null;
+  }
+}
+
 // Path C: the universal fallback. Works with any AI chat, costs nothing.
 export const AI_PROMPT = `You are helping me put song lyrics into my personal lyrics app.
 

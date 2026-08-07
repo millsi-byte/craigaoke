@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import BandThumb from '../components/BandThumb.jsx';
 import { artistCounts } from '../lib/songs.js';
 
 // Browse-by-artist: count chips from your own library, most-songs-first,
@@ -29,10 +30,11 @@ export default function ArtistsScreen({ songs, onPick }) {
               <button
                 key={value}
                 onClick={() => onPick(value)}
-                style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '16px 16px', border: 0, borderBottom: '1px solid var(--color-divider)', background: 'transparent', cursor: 'pointer', color: 'inherit', textAlign: 'left' }}
+                style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', border: 0, borderBottom: '1px solid var(--color-divider)', background: 'transparent', cursor: 'pointer', color: 'inherit', textAlign: 'left' }}
               >
-                <span style={{ fontFamily: 'var(--font-heading)', fontWeight: 800, fontSize: 17 }}>{value}</span>
-                <span style={{ fontSize: 13, color: 'var(--color-neutral-500)', fontVariantNumeric: 'tabular-nums' }}>
+                <BandThumb artist={value} size={44} />
+                <span style={{ flex: 1, minWidth: 0, fontFamily: 'var(--font-heading)', fontWeight: 800, fontSize: 17, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{value}</span>
+                <span style={{ flex: 'none', fontSize: 13, color: 'var(--color-neutral-500)', fontVariantNumeric: 'tabular-nums' }}>
                   {count} {count === 1 ? 'song' : 'songs'}
                 </span>
               </button>
