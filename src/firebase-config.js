@@ -17,4 +17,4 @@ export const FIREBASE_CONFIG = {
 // The Cloudflare Worker URL (worker/lyrics-import-worker.js), e.g.
 // 'https://craigaoke-import.something.workers.dev'. Without it, URL import
 // falls back to the AI paste path — everything else works.
-export const IMPORT_PROXY_URL = null;
+export const IMPORT_PROXY_URL = 'https://craigaoke.millsi.workers.dev';
