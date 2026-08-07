@@ -249,7 +249,7 @@ async function suggest(artistsParam, origin) {
     .split(',')
     .map((s) => s.trim())
     .filter(Boolean)
-    .slice(0, 5);
+    .slice(0, 8);
   if (!artists.length) return json({ suggestions: [] }, origin);
 
   const out = [];
@@ -257,7 +257,7 @@ async function suggest(artistsParam, origin) {
   for (const artist of artists) {
     try {
       const u =
-        'https://api.deezer.com/search?limit=8&order=RANKING&q=' +
+        'https://api.deezer.com/search?limit=15&order=RANKING&q=' +
         encodeURIComponent('artist:"' + artist + '"');
       const res = await fetch(u, { cf: { cacheTtl: 86400 } });
       if (!res.ok) continue;
