@@ -202,18 +202,36 @@ async function importLyrics(target, origin) {
 async function lookupBpm(artist, title, origin, env) {
   const key = env && env.GETSONGBPM_KEY;
   if (!key) return json({ error: 'no-key' }, origin);
-  if (!artist || !title) return json({ error: 'need-artist-and-title' }, origin, 400);
-  const url =
-    'https://api.getsong.co/search/?api_key=' +
-    encodeURIComponent(key) +
-    '&type=both&lookup=' +
-    encodeURIComponent('song:' + title + ' artist:' + artist);
-  try {
+  // Trim and collapse whitespace: a stray space from a page parse is enough to
+  // make GetSongBPM's exact-ish match miss.
+  const a = (artist || '').replace(/\s+/g, ' ').trim();
+  const t = (title || '').replace(/\s+/g, ' ').trim();
+  if (!a || !t) return json({ error: 'need-artist-and-title' }, origin, 400);
+
+  const norm = (s) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const search = async (lookup) => {
+    const url =
+      'https://api.getsong.co/search/?api_key=' +
+      encodeURIComponent(key) +
+      '&type=both&lookup=' +
+      encodeURIComponent(lookup);
     const res = await fetch(url, { cf: { cacheTtl: 86400 } });
-    if (!res.ok) return json({ error: 'lookup-' + res.status }, origin);
-    const data = await res.json();
-    const hit = Array.isArray(data.search) ? data.search[0] : null;
-    if (!hit || !hit.tempo) return json({ bpm: null }, origin);
+    if (!res.ok) return { status: res.status, list: [] };
+    const data = await res.json().catch(() => ({}));
+    return { status: 200, list: Array.isArray(data.search) ? data.search : [] };
+  };
+
+  try {
+    // Precise song+artist first; if that finds nothing, fall back to the title
+    // alone and pick the result whose artist matches.
+    let { status, list } = await search('song:' + t + ' artist:' + a);
+    if (status !== 200) return json({ error: 'lookup-' + status }, origin);
+    if (!list.length) ({ list } = await search(t));
+    const withTempo = list.filter((h) => h && h.tempo);
+    const hit =
+      withTempo.find((h) => norm(h.artist && (h.artist.name || h.artist)) === norm(a)) ||
+      withTempo[0];
+    if (!hit) return json({ bpm: null }, origin);
     return json(
       { bpm: Math.round(Number(hit.tempo)) || null, durationSec: Number(hit.duration) || null },
       origin
