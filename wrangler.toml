@@ -1,0 +1,15 @@
+# Config for the Craigaoke lyrics-import Worker (spec §6).
+#
+# Lets Cloudflare deploy the Worker straight from this repo — no copy-paste:
+#   Cloudflare dashboard → Workers & Pages → Create → Connect GitHub →
+#   pick millsi-byte/craigaoke → Deploy. Cloudflare reads this file and ships
+#   worker/lyrics-import-worker.js.
+#
+# Also works from a computer with the CLI:  npx wrangler deploy
+#
+# The GetSongBPM key (optional, for automatic tempo) is added later as a Worker
+# secret in the dashboard — Settings → Variables → GETSONGBPM_KEY — never here.
+name = "craigaoke-import"
+main = "worker/lyrics-import-worker.js"
+compatibility_date = "2024-11-01"
+workers_dev = true
