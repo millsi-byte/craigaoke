@@ -30,6 +30,7 @@ export default function App() {
   const [playingId, setPlayingId] = useState(null);
   const [draft, setDraft] = useState(null); // { song, title }
   const [artistFilter, setArtistFilter] = useState(null);
+  const [preview, setPreview] = useState(null); // { song, owner } — read-only view of a friend's song
 
   const songs = store.songs;
   const selected = songs.find((s) => s.id === selectedId) || null;
@@ -92,6 +93,24 @@ export default function App() {
     setSelectedId(id);
     setScreen('detail');
   };
+
+  // Read-only preview of a friend's song (from EVERYONE), with an add action.
+  if (preview) {
+    return (
+      <div style={shell}>
+        <SongDetailScreen
+          song={preview.song}
+          owner={preview.owner}
+          onBack={() => setPreview(null)}
+          onAddToLibrary={async () => {
+            const copy = await api.copyIn(preview.song, preview.owner.name);
+            setPreview(null);
+            if (copy) openSong(copy.id);
+          }}
+        />
+      </div>
+    );
+  }
   const play = (id) => setPlayingId(id);
 
   const saveDraft = (song) => {
@@ -176,6 +195,7 @@ export default function App() {
         artistFilter={artistFilter}
         onClearArtist={() => setArtistFilter(null)}
         onOpen={openSong}
+        onPreview={(song, owner) => setPreview({ song, owner })}
         onPlay={play}
         onFavorite={api.toggleFavorite}
         onCopyIn={{

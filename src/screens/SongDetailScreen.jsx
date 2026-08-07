@@ -4,6 +4,7 @@ import { isSectionHeader, lyricLines, lyricLineCount } from '../lib/songs.js';
 import { bpmFromTaps, clampBpm } from '../lib/tempo.js';
 import { lookupBpm } from '../lib/importer.js';
 import { siteOf } from '../lib/importer.js';
+import { initialsOf } from '../lib/store.js';
 
 function TempoPanel({ song, onChange }) {
   const taps = useRef([]);
@@ -74,9 +75,12 @@ function TempoPanel({ song, onChange }) {
   );
 }
 
-export default function SongDetailScreen({ song, onBack, onPlay, onEdit, onDelete, onFavorite, onPatch }) {
+export default function SongDetailScreen({ song, onBack, onPlay, onEdit, onDelete, onFavorite, onPatch, owner, onAddToLibrary }) {
   const [confirmDel, setConfirmDel] = useState(false);
   const lineCount = lyricLineCount(song.lyrics);
+  // Read-only preview of someone else's song (browse-only until copied, §10.2):
+  // no editing, favoriting, tempo or play — just read it and add it.
+  const readOnly = !!onAddToLibrary;
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
@@ -85,18 +89,30 @@ export default function SongDetailScreen({ song, onBack, onPlay, onEdit, onDelet
           <BackIcon />
         </button>
         <div style={{ flex: 1 }} />
-        <button onClick={() => onFavorite(song.id)} aria-label="Favorite" style={{ width: 44, height: 44, border: 0, background: 'transparent', cursor: 'pointer', display: 'grid', placeItems: 'center', color: song.favorite ? 'var(--color-accent)' : 'var(--color-neutral-500)' }}>
-          <HeartIcon filled={song.favorite} />
-        </button>
-        <button className="btn btn-ghost" onClick={() => onEdit(song)} style={{ minHeight: 40, fontSize: 12 }}>EDIT</button>
+        {!readOnly && (
+          <>
+            <button onClick={() => onFavorite(song.id)} aria-label="Favorite" style={{ width: 44, height: 44, border: 0, background: 'transparent', cursor: 'pointer', display: 'grid', placeItems: 'center', color: song.favorite ? 'var(--color-accent)' : 'var(--color-neutral-500)' }}>
+              <HeartIcon filled={song.favorite} />
+            </button>
+            <button className="btn btn-ghost" onClick={() => onEdit(song)} style={{ minHeight: 40, fontSize: 12 }}>EDIT</button>
+          </>
+        )}
       </header>
 
       <main style={{ flex: 1, overflowY: 'auto', minHeight: 0, padding: '18px 18px 40px 18px' }}>
         <h1 style={{ margin: 0, fontSize: 28, lineHeight: 1.1, letterSpacing: '-0.02em' }}>{song.title}</h1>
         <div style={{ fontSize: 16, color: 'var(--color-neutral-700)', marginTop: 4 }}>{song.artist || 'Unknown artist'}</div>
-        {song.copiedFrom && (
+        {song.copiedFrom && !readOnly && (
           <div style={{ fontSize: 12, color: 'var(--color-neutral-500)', marginTop: 6 }}>
             Copied from {song.copiedFrom.displayName}’s library — this is your own copy now.
+          </div>
+        )}
+        {readOnly && owner && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10, fontSize: 13, color: 'var(--color-neutral-700)' }}>
+            <span style={{ flex: 'none', width: 22, height: 22, display: 'grid', placeItems: 'center', background: owner.color || 'var(--color-neutral-500)', color: 'var(--color-bg)', fontFamily: 'var(--font-heading)', fontWeight: 800, fontSize: 10 }}>
+              {initialsOf(owner.name)}
+            </span>
+            In {owner.name}’s library — add it to make it your own.
           </div>
         )}
 
@@ -107,10 +123,18 @@ export default function SongDetailScreen({ song, onBack, onPlay, onEdit, onDelet
         )}
 
         <div style={{ marginTop: 18 }}>
-          <TempoPanel song={song} onChange={(patch) => onPatch(song.id, patch)} />
-          <button className="btn btn-primary" onClick={() => onPlay(song.id)} style={{ width: '100%', minHeight: 60, marginTop: 12, fontSize: 18, justifyContent: 'flex-start', gap: 12, padding: '0 22px' }}>
-            <PlayIcon size={20} /> PLAY {song.bpm ? `· ${song.bpm} BPM` : '· SET A TEMPO'}
-          </button>
+          {readOnly ? (
+            <button className="btn btn-primary" onClick={onAddToLibrary} style={{ width: '100%', minHeight: 60, fontSize: 18, justifyContent: 'flex-start', gap: 12, padding: '0 22px' }}>
+              + ADD TO MY LIBRARY
+            </button>
+          ) : (
+            <>
+              <TempoPanel song={song} onChange={(patch) => onPatch(song.id, patch)} />
+              <button className="btn btn-primary" onClick={() => onPlay(song.id)} style={{ width: '100%', minHeight: 60, marginTop: 12, fontSize: 18, justifyContent: 'flex-start', gap: 12, padding: '0 22px' }}>
+                <PlayIcon size={20} /> PLAY {song.bpm ? `· ${song.bpm} BPM` : '· SET A TEMPO'}
+              </button>
+            </>
+          )}
         </div>
 
         <div style={{ height: 2, background: 'var(--color-divider)', margin: '24px 0 20px 0' }} />
@@ -154,19 +178,21 @@ export default function SongDetailScreen({ song, onBack, onPlay, onEdit, onDelet
           </div>
         )}
 
-        <div style={{ marginTop: 32 }}>
-          {confirmDel ? (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <span style={{ fontSize: 14 }}>Delete this song?</span>
-              <button className="btn btn-primary" onClick={() => onDelete(song.id)} style={{ minHeight: 40, padding: '0 16px', fontSize: 12 }}>DELETE</button>
-              <button className="btn btn-ghost" onClick={() => setConfirmDel(false)} style={{ minHeight: 40, fontSize: 12 }}>KEEP</button>
-            </div>
-          ) : (
-            <button className="btn btn-ghost" onClick={() => setConfirmDel(true)} style={{ minHeight: 40, fontSize: 12, color: 'var(--color-neutral-600)' }}>
-              DELETE SONG
-            </button>
-          )}
-        </div>
+        {!readOnly && (
+          <div style={{ marginTop: 32 }}>
+            {confirmDel ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <span style={{ fontSize: 14 }}>Delete this song?</span>
+                <button className="btn btn-primary" onClick={() => onDelete(song.id)} style={{ minHeight: 40, padding: '0 16px', fontSize: 12 }}>DELETE</button>
+                <button className="btn btn-ghost" onClick={() => setConfirmDel(false)} style={{ minHeight: 40, fontSize: 12 }}>KEEP</button>
+              </div>
+            ) : (
+              <button className="btn btn-ghost" onClick={() => setConfirmDel(true)} style={{ minHeight: 40, fontSize: 12, color: 'var(--color-neutral-600)' }}>
+                DELETE SONG
+              </button>
+            )}
+          </div>
+        )}
       </main>
     </div>
   );
