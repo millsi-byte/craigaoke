@@ -1,6 +1,8 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { XIcon, PlayIcon, PauseIcon } from '../components/icons.jsx';
+import { XIcon, PlayIcon, PauseIcon, MetronomeIcon } from '../components/icons.jsx';
 import { isSectionHeader, lyricLines } from '../lib/songs.js';
+import { lineHasChords } from '../lib/chords.js';
+import ChordLine from '../components/ChordLine.jsx';
 import { acquireWakeLock, clampBpm, DEFAULT_LINES_PER_BEAT, pixelsPerSecond } from '../lib/tempo.js';
 
 const LINE_PX = 52; // matches the 34px lyric type at 1.5 line-height
@@ -22,6 +24,7 @@ export default function PlayScreen({ song, onExit, onCalibrate }) {
   const [phase, setPhase] = useState('countin'); // countin | playing | paused | done
   const [count, setCount] = useState(0);
   const [pulse, setPulse] = useState(0); // bumped on every beat to re-trigger the flash
+  const [metronome, setMetronome] = useState(false); // audible click, off by default
 
   const lpb = song.linesPerBeat || DEFAULT_LINES_PER_BEAT; // lines-per-beat calibration (fixed here)
 
@@ -36,6 +39,42 @@ export default function PlayScreen({ song, onExit, onCalibrate }) {
   const phaseRef = useRef('countin');
   phaseRef.current = phase;
   const countinRef = useRef(0);
+  const metronomeRef = useRef(metronome);
+  metronomeRef.current = metronome;
+  const audioRef = useRef(null);
+
+  // A short Web Audio click on the beat, only when the metronome is on. In sync
+  // with the pulse because it fires from the same beat events.
+  const playClick = (accent) => {
+    const ctx = audioRef.current;
+    if (!ctx) return;
+    const t = ctx.currentTime + 0.001;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.frequency.value = accent ? 1500 : 1000; // first beat accented
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.exponentialRampToValueAtTime(0.4, t + 0.002);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.05);
+    osc.connect(gain).connect(ctx.destination);
+    osc.start(t);
+    osc.stop(t + 0.06);
+  };
+  const beatTick = (accent) => {
+    setPulse((p) => p + 1);
+    if (metronomeRef.current) playClick(accent);
+  };
+  const toggleMetronome = () => {
+    setMetronome((on) => {
+      const next = !on;
+      if (next) {
+        try {
+          if (!audioRef.current) audioRef.current = new (window.AudioContext || window.webkitAudioContext)();
+          if (audioRef.current.state === 'suspended') audioRef.current.resume().catch(() => {});
+        } catch { /* no audio available */ }
+      }
+      return next;
+    });
+  };
 
   const beatMs = 60000 / bpm;
   const pulseMs = Math.min(Math.round(beatMs * 0.8), 300);
@@ -44,6 +83,9 @@ export default function PlayScreen({ song, onExit, onCalibrate }) {
 
   // Keep the screen awake for the whole session.
   useEffect(() => acquireWakeLock(), []);
+
+  // Release the audio context on exit.
+  useEffect(() => () => { if (audioRef.current) audioRef.current.close().catch(() => {}); }, []);
 
   const measure = () => {
     const view = viewRef.current;
@@ -92,7 +134,7 @@ export default function PlayScreen({ song, onExit, onCalibrate }) {
     let n = 0;
     const fire = () => {
       n += 1;
-      setPulse((p) => p + 1);
+      beatTick(n === 1 || n === 5);
       if (n <= 4) setCount(n);
       if (n >= 5) {
         clearInterval(countinRef.current);
@@ -116,9 +158,9 @@ export default function PlayScreen({ song, onExit, onCalibrate }) {
   // the new tempo whenever the BPM is nudged.
   useEffect(() => {
     if (phase !== 'playing') return undefined;
-    const iv = setInterval(() => setPulse((p) => p + 1), 60000 / bpm);
+    const iv = setInterval(() => beatTick(false), 60000 / bpm);
     return () => clearInterval(iv);
-  }, [phase, bpm]);
+  }, [phase, bpm]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const pause = () => {
     if (phaseRef.current !== 'playing') return;
@@ -181,7 +223,15 @@ export default function PlayScreen({ song, onExit, onCalibrate }) {
           style={{ position: 'absolute', top: 0, left: 0, right: 0, paddingTop: `${READ_FRACTION * 100}%`, paddingBottom: '60vh', willChange: 'transform' }}
         >
           {lines.map((line, i) =>
-            isSectionHeader(line) ? (
+            lineHasChords(line) ? (
+              <div key={i} style={{ minHeight: LINE_PX, display: 'flex', alignItems: 'center', padding: '8px 24px' }}>
+                <ChordLine
+                  line={line}
+                  chordStyle={{ fontSize: 18, fontWeight: 800, color: 'var(--color-accent)', fontFamily: 'var(--font-heading)', lineHeight: 1.1 }}
+                  wordStyle={{ fontSize: 34, lineHeight: 1.15, fontWeight: 600, fontFamily: 'var(--font-heading)', letterSpacing: '-0.01em' }}
+                />
+              </div>
+            ) : isSectionHeader(line) ? (
               <div key={i} style={{ height: LINE_PX, display: 'flex', alignItems: 'center', padding: '0 24px', fontSize: 15, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(243,242,242,0.4)', fontWeight: 600, fontFamily: 'var(--font-heading)' }}>
                 {line.replace(/^[[(]|[\])]$/g, '')}
               </div>
@@ -245,6 +295,14 @@ export default function PlayScreen({ song, onExit, onCalibrate }) {
             style={{ width: 56, height: 56, border: 0, background: 'var(--color-accent)', color: '#fff', cursor: 'pointer', display: 'grid', placeItems: 'center' }}
           >
             {phase === 'playing' ? <PauseIcon size={22} /> : <PlayIcon size={20} />}
+          </button>
+          <button
+            onClick={toggleMetronome}
+            aria-label={metronome ? 'Metronome on' : 'Metronome off'}
+            title="Metronome click"
+            style={{ width: 48, height: 48, border: metronome ? '1px solid var(--color-accent)' : '1px solid rgba(243,242,242,0.3)', background: metronome ? 'var(--color-accent)' : 'transparent', color: metronome ? '#fff' : 'rgba(243,242,242,0.7)', cursor: 'pointer', display: 'grid', placeItems: 'center' }}
+          >
+            <MetronomeIcon />
           </button>
           <div style={{ flex: 1 }} />
           <span style={{ fontSize: 11, letterSpacing: '0.1em', color: 'rgba(243,242,242,0.5)' }}>TEMPO</span>
