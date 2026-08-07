@@ -16,16 +16,14 @@ export let db = null;
 export let googleProvider = null;
 
 if (firebaseEnabled) {
-  // Safari (especially installed home-screen apps) blocks the sign-in redirect
-  // when the auth domain differs from the page's domain. Firebase Hosting
-  // serves the auth helper on every hosting domain, so use the current one and
-  // keep the whole flow same-origin.
-  const config = { ...FIREBASE_CONFIG };
-  if (typeof window !== 'undefined') {
-    const h = window.location.hostname;
-    if (h.endsWith('.web.app') || h.endsWith('.firebaseapp.com')) config.authDomain = h;
-  }
-  const app = initializeApp(config);
+  // Use the configured authDomain (…firebaseapp.com). Its /__/auth/handler is the
+  // redirect URI Google pre-approves when Google sign-in is enabled, so the OAuth
+  // flow is accepted. An earlier build rewrote authDomain to the current .web.app
+  // host to keep sign-in same-origin, but that host's handler is NOT on the OAuth
+  // client's authorized redirect URIs, so Google rejected sign-in with
+  // redirect_uri_mismatch. Popup sign-in (tried first in store.js) handles the
+  // cross-domain case; the redirect fallback lands on the pre-approved handler.
+  const app = initializeApp(FIREBASE_CONFIG);
   auth = getAuth(app);
   // Offline persistence: the library stays readable with no signal, and writes
   // queue until the connection returns.
