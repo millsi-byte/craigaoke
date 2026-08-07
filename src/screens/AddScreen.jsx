@@ -199,7 +199,7 @@ export default function AddScreen({ onDraft, onBlank, songs = [] }) {
           <button className="btn btn-primary" onClick={() => runUrl(url)} disabled={!looksLikeUrl(url) || busy} style={{ minHeight: 46, padding: '0 18px', marginTop: 10 }}>
             {busy ? 'READING…' : 'IMPORT'}
           </button>
-          <p style={{ margin: '10px 0 0 0', fontSize: 12, color: 'var(--color-neutral-500)' }}>Reads Genius and AZLyrics pages directly.</p>
+          <p style={{ margin: '10px 0 0 0', fontSize: 12, color: 'var(--color-neutral-500)' }}>Reads Genius and AZLyrics pages directly (lyrics only — for chords, paste them below).</p>
           {urlError && <p style={{ margin: '10px 0 0 0', fontSize: 13, color: 'var(--color-accent-700)' }}>{urlError}</p>}
         </div>
 
@@ -219,10 +219,16 @@ export default function AddScreen({ onDraft, onBlank, songs = [] }) {
           {aiError && <p style={{ margin: '10px 0 0 0', fontSize: 13, color: 'var(--color-accent-700)' }}>{aiError}</p>}
         </div>
 
-        {/* 4 — type it */}
-        <button className="btn btn-ghost" onClick={() => onBlank(emptySong())} style={{ minHeight: 48, marginTop: 20 }}>
-          + TYPE IT IN MYSELF
-        </button>
+        {/* 4 — type or paste it (the path for chords) */}
+        <div style={{ ...card, marginTop: 20 }}>
+          <div style={sectionLabel}>4 · Type or paste it — with chords</div>
+          <p style={{ margin: '8px 0 12px 0', fontSize: 14, color: 'var(--color-neutral-700)' }}>
+            The way to add <strong>chords</strong>: copy a chord sheet from a tab site (chords above the words) and paste it into the Lyrics box, or type it from memory. Chords render above the lyrics — inline <code>[G]</code> works too.
+          </p>
+          <button className="btn btn-secondary" onClick={() => onBlank(emptySong())} style={{ minHeight: 46, padding: '0 18px' }}>
+            + TYPE OR PASTE IT IN
+          </button>
+        </div>
       </main>
     </div>
   );
