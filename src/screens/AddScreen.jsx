@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { SearchIcon, ClipboardIcon, ExternalIcon } from '../components/icons.jsx';
 import { AI_PROMPT, fetchSuggestions, importFromUrl, looksLikeUrl, parseAiJson } from '../lib/importer.js';
 import { emptySong } from '../lib/songs.js';
@@ -12,6 +12,14 @@ const SUGGEST_LAST = 'craigaoke.suggest.last';
 const SUGGEST_DISMISSED = 'craigaoke.suggest.dismissed';
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 const suggestKey = (artist, title) => `${artist || ''}|${title || ''}`.toLowerCase().replace(/[^a-z0-9|]/g, '');
+const shuffle = (arr) => {
+  const a = arr.slice();
+  for (let i = a.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+};
 
 // The three ways in (spec §5) plus type-it-yourself. Every path ends on the
 // review screen, so this screen only ever produces a draft.
@@ -24,10 +32,11 @@ export default function AddScreen({ onDraft, onBlank, songs = [] }) {
   const [aiError, setAiError] = useState('');
   const [suggestions, setSuggestions] = useState([]);
   const [loadingSuggest, setLoadingSuggest] = useState(false);
+  const recentRef = useRef(new Set()); // keys shown this session, so repeats rotate
 
-  // Fetch a few suggestions from the artists already in the library, skipping
-  // songs already owned or previously waved off. `force` (the manual button)
-  // ignores the weekly throttle; the automatic run respects it.
+  // Fetch suggestions from the artists in the library, skipping songs already
+  // owned or waved off. Picks are spread across different artists and rotated so
+  // pressing again gives fresh songs. `force` ignores the weekly throttle.
   const loadSuggestions = (force) => {
     if (!songs.length) return;
     let last = 0;
@@ -36,25 +45,41 @@ export default function AddScreen({ onDraft, onBlank, songs = [] }) {
     try { dismissed = JSON.parse(localStorage.getItem(SUGGEST_DISMISSED) || '[]'); } catch { /* */ }
     if (!force && Date.now() - last < WEEK_MS) return;
 
-    const counts = {};
-    songs.forEach((s) => { const a = (s.artist || '').trim(); if (a) counts[a] = (counts[a] || 0) + 1; });
-    const artists = Object.keys(counts).sort((a, b) => counts[b] - counts[a]).slice(0, 5);
-    if (!artists.length) return;
+    // Different (shuffled) subset of artists each time.
+    const artistSet = [...new Set(songs.map((s) => (s.artist || '').trim()).filter(Boolean))];
+    if (!artistSet.length) return;
+    const artists = shuffle(artistSet).slice(0, 8);
 
     const owned = new Set(songs.map((s) => suggestKey(s.artist, s.title)));
     const skip = new Set(dismissed);
     setLoadingSuggest(true);
     fetchSuggestions(artists).then((list) => {
       setLoadingSuggest(false);
-      const picks = [];
-      for (const s of list) {
+      let pool = list.filter((s) => {
         const k = suggestKey(s.artist, s.title);
-        if (owned.has(k) || skip.has(k) || picks.some((p) => suggestKey(p.artist, p.title) === k)) continue;
-        picks.push(s);
-        if (picks.length >= 3) break;
+        return !owned.has(k) && !skip.has(k);
+      });
+      // Prefer songs not shown yet this session; reset once we run dry.
+      let fresh = pool.filter((s) => !recentRef.current.has(suggestKey(s.artist, s.title)));
+      if (fresh.length < 3) { recentRef.current.clear(); fresh = pool; }
+
+      // Group by artist and take round-robin, so the 3 picks span artists.
+      const byArtist = {};
+      for (const s of shuffle(fresh)) {
+        const a = (s.artist || '').toLowerCase();
+        if (!byArtist[a]) byArtist[a] = [];
+        byArtist[a].push(s);
       }
+      const groups = shuffle(Object.values(byArtist));
+      const picks = [];
+      for (let i = 0; picks.length < 3 && groups.some((g) => g.length); i += 1) {
+        const g = groups[i % groups.length];
+        if (g.length) picks.push(g.shift());
+      }
+
+      picks.forEach((p) => recentRef.current.add(suggestKey(p.artist, p.title)));
       if (picks.length) {
-        setSuggestions(picks);
+        setSuggestions(shuffle(picks));
         try { localStorage.setItem(SUGGEST_LAST, String(Date.now())); } catch { /* */ }
       }
     });
