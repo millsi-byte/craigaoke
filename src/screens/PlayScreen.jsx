@@ -1,26 +1,27 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { XIcon, PlayIcon, PauseIcon } from '../components/icons.jsx';
 import { isSectionHeader, lyricLines } from '../lib/songs.js';
-import { acquireWakeLock, DEFAULT_LINES_PER_BEAT, pixelsPerSecond } from '../lib/tempo.js';
+import { acquireWakeLock, clampBpm, DEFAULT_LINES_PER_BEAT, pixelsPerSecond } from '../lib/tempo.js';
 
 const LINE_PX = 52; // matches the 34px lyric type at 1.5 line-height
 const READ_FRACTION = 0.4; // the read line sits 40% down the screen
+const BPM_STEP = 2; // ± per tap
 
-// The teleprompter (spec §7.4): cook mode's hands-free pattern, repurposed —
-// full screen, screen kept awake, a constant tempo-driven scroll, and both
-// ways to pause. The nudge control self-calibrates linesPerBeat on exit, which
-// is what makes one constant rate actually work (spec §7.2).
+// The teleprompter (spec §7.4): full screen, screen kept awake, a tempo-driven
+// scroll, and both ways to pause.
 //
-// The beat is shown, not heard: a single beat clock drives a silent 4-beat
-// count-in and then keeps pulsing an on-screen marker in time with the BPM for
-// the whole song, so there's always a beat to lock into — including coming off
-// pause — without any metronome sound.
+// The tempo is the single dial. Adjusting speed changes the BPM, which drives
+// both the scroll rate and the on-screen beat pulse together — so speeding up
+// makes the words and the pulse move as one. A hand-tuned BPM saves back to the
+// song on exit. The beat is shown, not heard: a silent 4-beat count-in and then
+// a marker that pulses to the BPM the whole song, including coming off pause.
 export default function PlayScreen({ song, onExit, onCalibrate }) {
-  const bpm = song.bpm || 100; // Play always has a tempo; fall back so nothing dead-ends
-  const [lpb, setLpb] = useState(song.linesPerBeat || DEFAULT_LINES_PER_BEAT);
+  const [bpm, setBpm] = useState(clampBpm(song.bpm || 100)); // Play always has a tempo
   const [phase, setPhase] = useState('countin'); // countin | playing | paused | done
   const [count, setCount] = useState(0);
   const [pulse, setPulse] = useState(0); // bumped on every beat to re-trigger the flash
+
+  const lpb = song.linesPerBeat || DEFAULT_LINES_PER_BEAT; // lines-per-beat calibration (fixed here)
 
   const viewRef = useRef(null);
   const contentRef = useRef(null);
@@ -28,13 +29,11 @@ export default function PlayScreen({ song, onExit, onCalibrate }) {
   const maxYRef = useRef(0);
   const rafRef = useRef(0);
   const lastTsRef = useRef(0);
-  const lpbRef = useRef(lpb);
-  lpbRef.current = lpb;
-  const baseLpbRef = useRef(song.linesPerBeat || DEFAULT_LINES_PER_BEAT); // 100% reference for the readout
+  const bpmRef = useRef(bpm);
+  bpmRef.current = bpm;
   const phaseRef = useRef('countin');
   phaseRef.current = phase;
-  const beatTimerRef = useRef(0);
-  const beatNumRef = useRef(0);
+  const countinRef = useRef(0);
 
   const beatMs = 60000 / bpm;
   const pulseMs = Math.min(Math.round(beatMs * 0.8), 300);
@@ -43,11 +42,11 @@ export default function PlayScreen({ song, onExit, onCalibrate }) {
   // Keep the screen awake for the whole session.
   useEffect(() => acquireWakeLock(), []);
 
-  // Save the calibrated speed back to the song on the way out.
+  // Save a hand-tuned tempo back to the song on the way out.
   useEffect(
     () => () => {
-      if (onCalibrate && Math.abs(lpbRef.current - (song.linesPerBeat || DEFAULT_LINES_PER_BEAT)) > 1e-4) {
-        onCalibrate(song.id, lpbRef.current);
+      if (onCalibrate && bpmRef.current !== clampBpm(song.bpm || 100)) {
+        onCalibrate(song.id, { bpm: bpmRef.current, bpmSource: 'manual' });
       }
     },
     [] // eslint-disable-line react-hooks/exhaustive-deps
@@ -65,20 +64,14 @@ export default function PlayScreen({ song, onExit, onCalibrate }) {
     if (contentRef.current) contentRef.current.style.transform = `translate3d(0, ${-yRef.current}px, 0)`;
   };
 
-  const stopBeatClock = () => {
-    clearInterval(beatTimerRef.current);
-    beatTimerRef.current = 0;
-  };
-
   const tick = (ts) => {
     if (!lastTsRef.current) lastTsRef.current = ts;
     const dt = (ts - lastTsRef.current) / 1000;
     lastTsRef.current = ts;
-    yRef.current += pixelsPerSecond(bpm, lpbRef.current, LINE_PX) * dt;
+    yRef.current += pixelsPerSecond(bpmRef.current, lpb, LINE_PX) * dt; // live BPM
     if (yRef.current >= maxYRef.current) {
       yRef.current = maxYRef.current;
       apply();
-      stopBeatClock();
       setPhase('done');
       phaseRef.current = 'done';
       return;
@@ -92,56 +85,63 @@ export default function PlayScreen({ song, onExit, onCalibrate }) {
     rafRef.current = requestAnimationFrame(tick);
   };
 
-  // One beat clock: four silent count-in beats (1-2-3-4 on screen), then it
-  // keeps running so the pulse marker taps to the BPM for the whole song. Used
-  // on first play and on every resume, so coming off pause is a visual count-in
-  // with no sound.
-  const startBeatClock = () => {
-    stopBeatClock();
+  // Silent visual count-in: four beats at the current tempo (1-2-3-4 pulsing on
+  // screen), then start scrolling. Used on first play and on every resume, so
+  // coming off pause is a visual count-in with no sound.
+  const runCountIn = () => {
+    clearInterval(countinRef.current);
     cancelAnimationFrame(rafRef.current);
-    beatNumRef.current = 0;
     setCount(0);
     setPhase('countin');
     phaseRef.current = 'countin';
     measure();
+    let n = 0;
     const fire = () => {
-      beatNumRef.current += 1;
-      const n = beatNumRef.current;
+      n += 1;
       setPulse((p) => p + 1);
       if (n <= 4) setCount(n);
-      if (n === 5) {
+      if (n >= 5) {
+        clearInterval(countinRef.current);
+        countinRef.current = 0;
         setPhase('playing');
         phaseRef.current = 'playing';
         beginScroll();
       }
     };
     fire(); // first beat immediately
-    beatTimerRef.current = setInterval(fire, beatMs);
+    countinRef.current = setInterval(fire, 60000 / bpmRef.current);
   };
 
   useEffect(() => {
-    startBeatClock();
+    runCountIn();
     return () => {
       cancelAnimationFrame(rafRef.current);
-      stopBeatClock();
+      clearInterval(countinRef.current);
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // The beat marker pulses to the BPM the whole time you play; it restarts at
+  // the new tempo whenever the BPM is nudged.
+  useEffect(() => {
+    if (phase !== 'playing') return undefined;
+    const iv = setInterval(() => setPulse((p) => p + 1), 60000 / bpm);
+    return () => clearInterval(iv);
+  }, [phase, bpm]);
 
   const pause = () => {
     if (phaseRef.current !== 'playing') return;
     cancelAnimationFrame(rafRef.current);
-    stopBeatClock();
     setPhase('paused');
     phaseRef.current = 'paused';
   };
-  const resume = () => startBeatClock();
+  const resume = () => runCountIn();
   const restart = () => {
     yRef.current = 0;
     apply();
-    startBeatClock();
+    runCountIn();
   };
 
-  const nudge = (delta) => setLpb((v) => Math.min(1, Math.max(0.02, v * (1 + delta))));
+  const nudge = (delta) => setBpm((v) => clampBpm(v + delta));
 
   return (
     <div className="play-root" style={{ position: 'fixed', inset: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
@@ -157,7 +157,6 @@ export default function PlayScreen({ song, onExit, onCalibrate }) {
         <div style={{ flex: 1, minWidth: 0, fontFamily: 'var(--font-heading)', fontWeight: 800, fontSize: 14, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
           {song.title}
         </div>
-        <span style={{ fontSize: 12, color: 'rgba(243,242,242,0.6)', fontVariantNumeric: 'tabular-nums' }}>{bpm} BPM</span>
       </div>
 
       {/* the scrolling lyrics — the whole area is a tap-to-pause zone */}
@@ -170,8 +169,7 @@ export default function PlayScreen({ song, onExit, onCalibrate }) {
         <div style={{ position: 'absolute', top: `${READ_FRACTION * 100}%`, left: 0, right: 0, height: 2, background: 'var(--color-accent)', zIndex: 2, opacity: 0.9 }} />
 
         {/* the beat pulse — an accent square on the read line that flashes to the
-            BPM the whole time you play, sitting in the left margin clear of the
-            lyric text. */}
+            BPM the whole time you play, in the left margin clear of the lyrics. */}
         {phase === 'playing' && (
           <div style={{ position: 'absolute', top: `${READ_FRACTION * 100}%`, left: 6, transform: 'translateY(-50%)', width: 14, height: 14, zIndex: 3, pointerEvents: 'none' }}>
             <div key={pulse} style={{ width: '100%', height: '100%', background: 'var(--color-accent)', transformOrigin: 'center', animation: `craigBeat ${pulseMs}ms ease-out both` }} />
@@ -225,7 +223,7 @@ export default function PlayScreen({ song, onExit, onCalibrate }) {
         )}
       </div>
 
-      {/* bottom controls: persistent pause + speed nudge */}
+      {/* bottom controls: persistent pause + tempo (BPM) */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px calc(12px + env(safe-area-inset-bottom)) 16px', zIndex: 3 }}>
         <button
           onClick={() => (phase === 'playing' ? pause() : resume())}
@@ -235,12 +233,12 @@ export default function PlayScreen({ song, onExit, onCalibrate }) {
           {phase === 'playing' ? <PauseIcon size={22} /> : <PlayIcon size={20} />}
         </button>
         <div style={{ flex: 1 }} />
-        <span style={{ fontSize: 11, letterSpacing: '0.1em', color: 'rgba(243,242,242,0.5)' }}>SPEED</span>
-        <button onClick={() => nudge(-0.04)} aria-label="Slower" style={{ width: 48, height: 48, border: '1px solid rgba(243,242,242,0.3)', background: 'transparent', color: '#f3f2f2', cursor: 'pointer', fontSize: 22, fontFamily: 'var(--font-heading)' }}>–</button>
-        <span aria-live="polite" style={{ minWidth: 54, textAlign: 'center', fontSize: 15, fontWeight: 700, fontFamily: 'var(--font-heading)', color: '#f3f2f2', fontVariantNumeric: 'tabular-nums' }}>
-          {Math.round((lpb / baseLpbRef.current) * 100)}%
+        <span style={{ fontSize: 11, letterSpacing: '0.1em', color: 'rgba(243,242,242,0.5)' }}>TEMPO</span>
+        <button onClick={() => nudge(-BPM_STEP)} aria-label="Slower" style={{ width: 48, height: 48, border: '1px solid rgba(243,242,242,0.3)', background: 'transparent', color: '#f3f2f2', cursor: 'pointer', fontSize: 22, fontFamily: 'var(--font-heading)' }}>–</button>
+        <span aria-live="polite" style={{ minWidth: 78, textAlign: 'center', fontSize: 15, fontWeight: 700, fontFamily: 'var(--font-heading)', color: '#f3f2f2', fontVariantNumeric: 'tabular-nums' }}>
+          {bpm} BPM
         </span>
-        <button onClick={() => nudge(0.04)} aria-label="Faster" style={{ width: 48, height: 48, border: '1px solid rgba(243,242,242,0.3)', background: 'transparent', color: '#f3f2f2', cursor: 'pointer', fontSize: 22, fontFamily: 'var(--font-heading)' }}>+</button>
+        <button onClick={() => nudge(BPM_STEP)} aria-label="Faster" style={{ width: 48, height: 48, border: '1px solid rgba(243,242,242,0.3)', background: 'transparent', color: '#f3f2f2', cursor: 'pointer', fontSize: 22, fontFamily: 'var(--font-heading)' }}>+</button>
       </div>
     </div>
   );

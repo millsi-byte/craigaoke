@@ -83,7 +83,7 @@ export default function App() {
         onExit={() => {
           setPlayingId(null);
         }}
-        onCalibrate={(id, lpb) => api.updateSong(id, { linesPerBeat: lpb })}
+        onCalibrate={(id, patch) => api.updateSong(id, patch)}
       />
     );
   }
