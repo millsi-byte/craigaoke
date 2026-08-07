@@ -1,0 +1,55 @@
+# Publishes Craigaoke to Firebase Hosting whenever code lands on `main`.
+#
+# One-time setup (README "Step 4 — Publish"):
+#   1. Firebase console → Project settings → Service accounts →
+#      Generate new private key.
+#   2. GitHub repo → Settings → Secrets and variables → Actions → add it as a
+#      secret named FIREBASE_SERVICE_ACCOUNT_CRAIGAOKE (paste the whole JSON).
+#
+# It builds the SPA and deploys Hosting + Firestore rules together, so the rules
+# in this repo are always the rules that are live. Nothing here is a secret
+# except that one service-account key.
+name: Deploy to Firebase
+
+on:
+  push:
+    branches: [main]
+  # Lets you re-run a deploy by hand from the Actions tab.
+  workflow_dispatch:
+
+# One live site; never let two deploys race.
+concurrency:
+  group: firebase-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Deploy Hosting + Firestore rules
+        # firebase-tools reads the service account from GOOGLE_APPLICATION_CREDENTIALS.
+        # This mirrors the manual command in the README: `firebase deploy`.
+        run: |
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/service-account.json"
+          npx --yes firebase-tools@latest deploy \
+            --only hosting,firestore:rules \
+            --project craigaoke \
+            --non-interactive
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_CRAIGAOKE }}
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/service-account.json
