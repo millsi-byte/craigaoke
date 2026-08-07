@@ -69,9 +69,12 @@ export default function EditScreen({ initial, tagSuggestions = [], title, onSave
             className="input"
             value={song.lyrics}
             onChange={(e) => set({ lyrics: e.target.value })}
-            placeholder={'[Verse 1]\nFirst line\nSecond line'}
+            placeholder={'[Verse 1]\n[G]First line of [D]lyrics\nSecond line'}
             style={{ minHeight: 240, resize: 'vertical', lineHeight: 1.6, fontFamily: 'var(--font-body)' }}
           />
+          <p style={{ margin: '6px 0 0 0', fontSize: 12, color: 'var(--color-neutral-500)' }}>
+            Optional chords: put them inline like <code>[G]</code> right before the word — they show above the lyrics. Leave them out for lyrics only.
+          </p>
         </div>
 
         <div style={field}>
