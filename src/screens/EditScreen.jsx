@@ -78,8 +78,8 @@ export default function EditScreen({ initial, tagSuggestions = [], title, onSave
         </div>
 
         <div style={field}>
-          <label style={labelStyle}>Tags</label>
-          <TagInput value={song.tags || []} suggestions={tagSuggestions} onChange={(tags) => set({ tags })} />
+          <label style={labelStyle}>Genres</label>
+          <TagInput value={song.tags || []} suggestions={tagSuggestions} onChange={(tags) => set({ tags })} placeholder="Add a genre, e.g. Rock" />
         </div>
 
         <div style={field}>
