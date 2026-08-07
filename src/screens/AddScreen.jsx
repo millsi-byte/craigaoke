@@ -1,20 +1,71 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { SearchIcon, ClipboardIcon, ExternalIcon } from '../components/icons.jsx';
-import { AI_PROMPT, importFromUrl, looksLikeUrl, parseAiJson } from '../lib/importer.js';
+import { AI_PROMPT, fetchSuggestions, importFromUrl, looksLikeUrl, parseAiJson } from '../lib/importer.js';
 import { emptySong } from '../lib/songs.js';
 
 const sectionLabel = { fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--color-accent)', fontWeight: 600 };
 const card = { border: '1px solid var(--color-divider)', padding: 16, marginTop: 16 };
 
+// Weekly "songs you might like" (spec: capture-only, so these are metadata
+// suggestions; the user still captures lyrics through the paths below).
+const SUGGEST_LAST = 'craigaoke.suggest.last';
+const SUGGEST_DISMISSED = 'craigaoke.suggest.dismissed';
+const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+const suggestKey = (artist, title) => `${artist || ''}|${title || ''}`.toLowerCase().replace(/[^a-z0-9|]/g, '');
+
 // The three ways in (spec §5) plus type-it-yourself. Every path ends on the
 // review screen, so this screen only ever produces a draft.
-export default function AddScreen({ onDraft, onBlank }) {
+export default function AddScreen({ onDraft, onBlank, songs = [] }) {
   const [url, setUrl] = useState('');
   const [busy, setBusy] = useState(false);
   const [urlError, setUrlError] = useState('');
   const [copied, setCopied] = useState(false);
   const [aiText, setAiText] = useState('');
   const [aiError, setAiError] = useState('');
+  const [suggestions, setSuggestions] = useState([]);
+
+  // Once a week, fetch a few suggestions from the artists already in the
+  // library, skipping songs already owned or previously waved off.
+  useEffect(() => {
+    if (!songs.length) return;
+    let last = 0;
+    let dismissed = [];
+    try { last = Number(localStorage.getItem(SUGGEST_LAST) || 0); } catch { /* private mode */ }
+    try { dismissed = JSON.parse(localStorage.getItem(SUGGEST_DISMISSED) || '[]'); } catch { /* */ }
+    if (Date.now() - last < WEEK_MS) return;
+
+    const counts = {};
+    songs.forEach((s) => { const a = (s.artist || '').trim(); if (a) counts[a] = (counts[a] || 0) + 1; });
+    const artists = Object.keys(counts).sort((a, b) => counts[b] - counts[a]).slice(0, 5);
+    if (!artists.length) return;
+
+    const owned = new Set(songs.map((s) => suggestKey(s.artist, s.title)));
+    const skip = new Set(dismissed);
+    fetchSuggestions(artists).then((list) => {
+      const picks = [];
+      for (const s of list) {
+        const k = suggestKey(s.artist, s.title);
+        if (owned.has(k) || skip.has(k) || picks.some((p) => suggestKey(p.artist, p.title) === k)) continue;
+        picks.push(s);
+        if (picks.length >= 3) break;
+      }
+      if (picks.length) {
+        setSuggestions(picks);
+        try { localStorage.setItem(SUGGEST_LAST, String(Date.now())); } catch { /* */ }
+      }
+    });
+  }, [songs]);
+
+  const previewSuggestion = (s) =>
+    window.open('https://www.google.com/search?q=' + encodeURIComponent(`${s.artist} ${s.title} lyrics`), '_blank', 'noreferrer');
+  const dismissSuggestion = (s) => {
+    setSuggestions((cur) => cur.filter((x) => suggestKey(x.artist, x.title) !== suggestKey(s.artist, s.title)));
+    try {
+      const d = JSON.parse(localStorage.getItem(SUGGEST_DISMISSED) || '[]');
+      d.push(suggestKey(s.artist, s.title));
+      localStorage.setItem(SUGGEST_DISMISSED, JSON.stringify(d.slice(-200)));
+    } catch { /* */ }
+  };
 
   const runUrl = async (value) => {
     setUrlError('');
@@ -61,6 +112,32 @@ export default function AddScreen({ onDraft, onBlank }) {
       </header>
 
       <main style={{ flex: 1, overflowY: 'auto', minHeight: 0, padding: '4px 16px 32px 16px' }}>
+        {/* 0 — weekly suggestions from the library's artists */}
+        {suggestions.length > 0 && (
+          <div style={{ ...card, borderColor: 'var(--color-accent)' }}>
+            <div style={{ display: 'flex', alignItems: 'center' }}>
+              <div style={sectionLabel}>Suggested for you</div>
+              <div style={{ flex: 1 }} />
+              <button className="btn btn-ghost" onClick={() => setSuggestions([])} style={{ minHeight: 32, fontSize: 11 }}>NOT NOW</button>
+            </div>
+            <p style={{ margin: '8px 0 4px 0', fontSize: 13, color: 'var(--color-neutral-700)' }}>
+              Based on artists in your library. Preview opens the lyrics page — like it? Copy the link and paste it in step 2 below.
+            </p>
+            {suggestions.map((s) => (
+              <div key={suggestKey(s.artist, s.title)} style={{ display: 'flex', alignItems: 'center', gap: 10, paddingTop: 12, marginTop: 12, borderTop: '1px solid var(--color-divider)' }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{s.title}</div>
+                  <div style={{ fontSize: 13, color: 'var(--color-neutral-600)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{s.artist}</div>
+                </div>
+                <button className="btn btn-secondary" onClick={() => previewSuggestion(s)} style={{ minHeight: 40, padding: '0 12px', fontSize: 12, whiteSpace: 'nowrap' }}>
+                  PREVIEW <ExternalIcon />
+                </button>
+                <button aria-label={`No thanks, ${s.title}`} onClick={() => dismissSuggestion(s)} style={{ width: 40, height: 40, border: '1px solid var(--color-divider)', background: 'transparent', cursor: 'pointer', fontSize: 15 }}>✕</button>
+              </div>
+            ))}
+          </div>
+        )}
+
         {/* 1 — find it on the web */}
         <div style={card}>
           <div style={sectionLabel}>1 · Find it</div>

@@ -148,6 +148,7 @@ export default function App() {
   } else if (screen === 'add') {
     body = (
       <AddScreen
+        songs={songs}
         onDraft={(song, title) => {
           setDraft({ song, title });
           setScreen('edit');
