@@ -48,6 +48,12 @@ export default function SignInScreen({ authStep, authError, user, allowlist, onS
           {authError && <p style={{ margin: '12px 0 0 0', fontSize: 13, color: 'var(--color-accent-700)', maxWidth: 380 }}>{authError}</p>}
         </div>
       )}
+
+      {/* Public GetSongBPM credit — their free tier requires a visible backlink,
+          and the in-app one sits behind sign-in, so keep one on this page too. */}
+      <div style={{ fontSize: 12, color: 'var(--color-neutral-500)' }}>
+        Tempo data by <a href="https://getsongbpm.com" target="_blank" rel="noreferrer">GetSongBPM</a>
+      </div>
     </div>
   );
 }
