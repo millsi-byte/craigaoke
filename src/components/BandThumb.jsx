@@ -34,7 +34,7 @@ function load(name) {
 
 const initials = (name) => (name || '?').trim().slice(0, 2).toUpperCase();
 
-export default function BandThumb({ artist, size = 52 }) {
+export default function BandThumb({ artist, size = 52, fill = false }) {
   const [url, setUrl] = useState(null);
   useEffect(() => {
     let alive = true;
@@ -43,16 +43,18 @@ export default function BandThumb({ artist, size = 52 }) {
     return () => { alive = false; };
   }, [artist]);
 
-  const box = { flex: 'none', width: size, height: size, overflow: 'hidden', background: 'var(--color-divider)', display: 'grid', placeItems: 'center' };
+  const box = fill
+    ? { width: '100%', aspectRatio: '1 / 1', overflow: 'hidden', background: 'var(--color-divider)', display: 'grid', placeItems: 'center' }
+    : { flex: 'none', width: size, height: size, overflow: 'hidden', background: 'var(--color-divider)', display: 'grid', placeItems: 'center' };
   if (url) {
     return (
       <div style={box}>
-        <img src={url} alt="" width={size} height={size} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+        <img src={url} alt="" loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
       </div>
     );
   }
   return (
-    <div style={{ ...box, color: 'var(--color-neutral-600)', fontFamily: 'var(--font-heading)', fontWeight: 800, fontSize: Math.round(size * 0.32) }}>
+    <div style={{ ...box, color: 'var(--color-neutral-600)', fontFamily: 'var(--font-heading)', fontWeight: 800, fontSize: fill ? 30 : Math.round(size * 0.32) }}>
       {initials(artist)}
     </div>
   );

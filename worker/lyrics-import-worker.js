@@ -297,6 +297,32 @@ async function artistImage(name, origin) {
   }
 }
 
+// A genre for the artist, so imports can auto-tag by genre. Deezer has no genre
+// on the artist object, but its albums do: find the artist's top track, read
+// that album's genre. Free, no key; null when unknown.
+async function genre(name, origin) {
+  const q = (name || '').trim();
+  if (!q) return json({ genre: null }, origin);
+  try {
+    const s = await fetch(
+      'https://api.deezer.com/search?limit=1&q=' + encodeURIComponent('artist:"' + q + '"'),
+      { cf: { cacheTtl: 604800 } }
+    );
+    if (!s.ok) return json({ genre: null }, origin);
+    const sd = await s.json().catch(() => ({}));
+    const track = Array.isArray(sd.data) ? sd.data[0] : null;
+    const albumId = track && track.album && track.album.id;
+    if (!albumId) return json({ genre: null }, origin);
+    const a = await fetch('https://api.deezer.com/album/' + albumId, { cf: { cacheTtl: 604800 } });
+    if (!a.ok) return json({ genre: null }, origin);
+    const ad = await a.json().catch(() => ({}));
+    const g = ad && ad.genres && Array.isArray(ad.genres.data) && ad.genres.data[0] ? ad.genres.data[0].name : null;
+    return json({ genre: g }, origin);
+  } catch {
+    return json({ genre: null }, origin);
+  }
+}
+
 export default {
   async fetch(request, env) {
     const origin = request.headers.get('Origin') || '';
@@ -311,6 +337,9 @@ export default {
     }
     if (url.pathname === '/artist-image') {
       return artistImage(url.searchParams.get('name') || '', origin);
+    }
+    if (url.pathname === '/genre') {
+      return genre(url.searchParams.get('artist') || '', origin);
     }
     return importLyrics(url.searchParams.get('url') || '', origin);
   },
