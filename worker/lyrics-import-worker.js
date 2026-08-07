@@ -82,9 +82,34 @@ const pageTitle = (html) => {
 // so each host needs its own rule. Keep every site-specific assumption here.
 
 function extractGenius(html) {
-  const blocks = [...html.matchAll(/<div[^>]+data-lyrics-container=["']true["'][^>]*>([\s\S]*?)<\/div>\s*(?=<div|<\/div>|$)/gi)];
-  if (!blocks.length) return null;
-  return blocks.map(([, inner]) => toText(inner)).join('\n\n').replace(/\n{3,}/g, '\n\n').trim();
+  // Genius wraps lyrics in one or more div[data-lyrics-container="true"], and
+  // nests other <div>s inside (annotations, section wrappers). A non-greedy
+  // "up to the first </div>" regex truncates at the first nested close and
+  // drops most of the song, so track <div>/</div> depth to capture each whole
+  // container.
+  const results = [];
+  const openRe = /<div[^>]*\bdata-lyrics-container=["']true["'][^>]*>/gi;
+  let open;
+  while ((open = openRe.exec(html)) !== null) {
+    const start = openRe.lastIndex;
+    const tagRe = /<(\/?)div\b[^>]*>/gi;
+    tagRe.lastIndex = start;
+    let depth = 1;
+    let end = -1;
+    let tag;
+    while ((tag = tagRe.exec(html)) !== null) {
+      if (tag[1] === '/') {
+        if (--depth === 0) { end = tag.index; break; }
+      } else {
+        depth++;
+      }
+    }
+    if (end === -1) end = html.length;
+    results.push(html.slice(start, end));
+    openRe.lastIndex = end;
+  }
+  if (!results.length) return null;
+  return results.map(toText).join('\n\n').replace(/\n{3,}/g, '\n\n').trim();
 }
 
 function metaGenius(html) {
