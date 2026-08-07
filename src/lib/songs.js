@@ -71,8 +71,9 @@ export const emptySong = () => ({
   lyrics: '',
   sourceUrl: null,
   sourceSite: null,
-  bpm: null,
+  bpm: null, // the tempo you play it at (preferred)
   bpmSource: null,
+  publishedBpm: null, // the real looked-up tempo, for reference
   linesPerBeat: null,
   tags: [],
   favorite: false,
@@ -93,6 +94,7 @@ export const copyForLibrary = (song, fromDisplayName) => ({
   sourceSite: song.sourceSite || null,
   bpm: song.bpm || null,
   bpmSource: song.bpm ? song.bpmSource || null : null,
+  publishedBpm: song.publishedBpm || null, // objective tempo travels with the copy
   links: (song.links || []).map((l) => ({ ...l })),
   copiedFrom: { uid: song.ownerUid, songId: song.id, displayName: fromDisplayName || 'a friend' },
 });
