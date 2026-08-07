@@ -102,9 +102,35 @@ Rules:
 - Keep section headers like [Verse 1] or [Chorus] on their own lines.
 - Do NOT include chords or tablature — strip any chord lines out.
 - "bpm": a number only if you actually know the song's tempo, otherwise null.
+- Use plain straight double quotes (") throughout — never curly/smart quotes
+  (“ ” ‘ ’). No trailing commas. The reply must be JSON a strict parser accepts.
 - Return the JSON object on its own. No fences, no commentary.
 
 The song is: `;
+
+// What AI chats actually return isn't always strict JSON: phones and chat UIs
+// auto-"curl" straight quotes into “smart” ones, and models sometimes leave a
+// trailing comma. Try strict first (never touch already-valid JSON), then apply
+// the smallest safe repairs and try once more.
+function relaxedJsonParse(body) {
+  try {
+    return JSON.parse(body);
+  } catch {
+    /* fall through to repair */
+  }
+  const repaired = body
+    // curly / typographic double quotes → straight "
+    .replace(/[“”„‟″‶]/g, '"')
+    // curly single quotes / apostrophes → straight ' (safe inside JSON strings)
+    .replace(/[‘’‚‛′‵]/g, "'")
+    // trailing comma before a closing } or ]
+    .replace(/,(\s*[}\]])/g, '$1');
+  try {
+    return JSON.parse(repaired);
+  } catch {
+    return null;
+  }
+}
 
 // Accepts what an AI chat actually returns — fenced or not, with or without
 // surrounding chatter.
@@ -120,10 +146,8 @@ export function parseAiJson(text) {
     body = body.slice(start, end + 1);
   }
 
-  let data;
-  try {
-    data = JSON.parse(body);
-  } catch {
+  const data = relaxedJsonParse(body);
+  if (!data || typeof data !== 'object' || Array.isArray(data)) {
     return { error: 'That isn’t valid JSON — copy the AI’s whole reply and try again.' };
   }
 
