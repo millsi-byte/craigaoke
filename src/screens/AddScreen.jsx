@@ -23,16 +23,18 @@ export default function AddScreen({ onDraft, onBlank, songs = [] }) {
   const [aiText, setAiText] = useState('');
   const [aiError, setAiError] = useState('');
   const [suggestions, setSuggestions] = useState([]);
+  const [loadingSuggest, setLoadingSuggest] = useState(false);
 
-  // Once a week, fetch a few suggestions from the artists already in the
-  // library, skipping songs already owned or previously waved off.
-  useEffect(() => {
+  // Fetch a few suggestions from the artists already in the library, skipping
+  // songs already owned or previously waved off. `force` (the manual button)
+  // ignores the weekly throttle; the automatic run respects it.
+  const loadSuggestions = (force) => {
     if (!songs.length) return;
     let last = 0;
     let dismissed = [];
     try { last = Number(localStorage.getItem(SUGGEST_LAST) || 0); } catch { /* private mode */ }
     try { dismissed = JSON.parse(localStorage.getItem(SUGGEST_DISMISSED) || '[]'); } catch { /* */ }
-    if (Date.now() - last < WEEK_MS) return;
+    if (!force && Date.now() - last < WEEK_MS) return;
 
     const counts = {};
     songs.forEach((s) => { const a = (s.artist || '').trim(); if (a) counts[a] = (counts[a] || 0) + 1; });
@@ -41,7 +43,9 @@ export default function AddScreen({ onDraft, onBlank, songs = [] }) {
 
     const owned = new Set(songs.map((s) => suggestKey(s.artist, s.title)));
     const skip = new Set(dismissed);
+    setLoadingSuggest(true);
     fetchSuggestions(artists).then((list) => {
+      setLoadingSuggest(false);
       const picks = [];
       for (const s of list) {
         const k = suggestKey(s.artist, s.title);
@@ -54,7 +58,9 @@ export default function AddScreen({ onDraft, onBlank, songs = [] }) {
         try { localStorage.setItem(SUGGEST_LAST, String(Date.now())); } catch { /* */ }
       }
     });
-  }, [songs]);
+  };
+
+  useEffect(() => { loadSuggestions(false); }, [songs]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const previewSuggestion = (s) =>
     window.open('https://www.google.com/search?q=' + encodeURIComponent(`${s.artist} ${s.title} lyrics`), '_blank', 'noreferrer');
@@ -112,6 +118,13 @@ export default function AddScreen({ onDraft, onBlank, songs = [] }) {
       </header>
 
       <main style={{ flex: 1, overflowY: 'auto', minHeight: 0, padding: '4px 16px 32px 16px' }}>
+        {/* manual trigger when no suggestions are on screen */}
+        {suggestions.length === 0 && songs.length > 0 && (
+          <button className="btn btn-secondary" onClick={() => loadSuggestions(true)} disabled={loadingSuggest} style={{ minHeight: 44, width: '100%', marginTop: 16 }}>
+            {loadingSuggest ? 'FINDING…' : '✨ SHOW SONG SUGGESTIONS'}
+          </button>
+        )}
+
         {/* 0 — weekly suggestions from the library's artists */}
         {suggestions.length > 0 && (
           <div style={{ ...card, borderColor: 'var(--color-accent)' }}>

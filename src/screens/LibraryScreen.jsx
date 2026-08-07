@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from 'react';
 import { SearchIcon, HeartIcon, PlayIcon, ChevronDownIcon } from '../components/icons.jsx';
 import BandThumb from '../components/BandThumb.jsx';
 import { allTags, filterSongs, sortSongs, matchesQuery } from '../lib/songs.js';
-import { initialsOf } from '../lib/store.js';
 
 const chip = (on) => ({
   flex: 'none',
@@ -21,17 +20,6 @@ const chip = (on) => ({
   gap: 6,
 });
 
-function OwnerBadge({ owner }) {
-  return (
-    <span
-      title={owner.name}
-      style={{ flex: 'none', width: 22, height: 22, display: 'grid', placeItems: 'center', background: owner.color || 'var(--color-neutral-500)', color: 'var(--color-bg)', fontFamily: 'var(--font-heading)', fontWeight: 800, fontSize: 10 }}
-    >
-      {initialsOf(owner.name)}
-    </span>
-  );
-}
-
 function SongRow({ song, owner, onOpen, onPlay, onFavorite, onCopyIn }) {
   const foreign = owner && !owner.mine;
   return (
@@ -45,22 +33,25 @@ function SongRow({ song, owner, onOpen, onPlay, onFavorite, onCopyIn }) {
           <div style={{ fontFamily: 'var(--font-heading)', fontWeight: 800, fontSize: 17, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
             {song.title}
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 2 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 2, flexWrap: 'wrap' }}>
             <span style={{ fontSize: 13, color: 'var(--color-neutral-700)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
               {song.artist || 'Unknown artist'}
             </span>
             {song.bpm ? <span style={{ fontSize: 11, color: 'var(--color-neutral-500)', fontVariantNumeric: 'tabular-nums' }}>· {song.bpm} BPM</span> : null}
+            {foreign ? (
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11, color: 'var(--color-neutral-600)', whiteSpace: 'nowrap' }}>
+                <span style={{ width: 8, height: 8, flex: 'none', background: owner.color || 'var(--color-neutral-500)' }} />
+                {owner.name}
+              </span>
+            ) : null}
           </div>
         </div>
       </button>
 
       {foreign ? (
-        <>
-          <OwnerBadge owner={owner} />
-          <button className="btn btn-secondary" onClick={onCopyIn} style={{ minHeight: 38, padding: '0 12px', fontSize: 11 }}>
-            ADD TO MINE
-          </button>
-        </>
+        <button className="btn btn-secondary" onClick={onCopyIn} style={{ minHeight: 38, padding: '0 12px', fontSize: 11, flex: 'none' }}>
+          ADD TO MINE
+        </button>
       ) : (
         <>
           <button
@@ -84,7 +75,7 @@ function SongRow({ song, owner, onOpen, onPlay, onFavorite, onCopyIn }) {
   );
 }
 
-export default function LibraryScreen({ songs, onOpen, onPlay, onFavorite, onCopyIn, artistFilter, onClearArtist }) {
+export default function LibraryScreen({ songs, onOpen, onPreview, onPlay, onFavorite, onCopyIn, artistFilter, onClearArtist }) {
   const [query, setQuery] = useState('');
   const [scope, setScope] = useState('mine'); // mine | everyone
   const [favoritesOnly, setFavoritesOnly] = useState(false);
@@ -186,7 +177,7 @@ export default function LibraryScreen({ songs, onOpen, onPlay, onFavorite, onCop
               key={owner.uid + '/' + song.id}
               song={song}
               owner={owner}
-              onOpen={() => owner.mine && onOpen(song.id)}
+              onOpen={() => (owner.mine ? onOpen(song.id) : onPreview(song, owner))}
               onPlay={() => onPlay(song.id)}
               onFavorite={() => onFavorite(song.id)}
               onCopyIn={() => onCopyIn.copy(song, owner.name)}
