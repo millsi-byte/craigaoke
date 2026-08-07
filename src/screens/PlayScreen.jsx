@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { XIcon, PlayIcon, PauseIcon } from '../components/icons.jsx';
 import { isSectionHeader, lyricLines } from '../lib/songs.js';
-import { acquireWakeLock, countIn, DEFAULT_LINES_PER_BEAT, pixelsPerSecond } from '../lib/tempo.js';
+import { acquireWakeLock, DEFAULT_LINES_PER_BEAT, pixelsPerSecond } from '../lib/tempo.js';
 
 const LINE_PX = 52; // matches the 34px lyric type at 1.5 line-height
 const READ_FRACTION = 0.4; // the read line sits 40% down the screen
@@ -10,11 +10,17 @@ const READ_FRACTION = 0.4; // the read line sits 40% down the screen
 // full screen, screen kept awake, a constant tempo-driven scroll, and both
 // ways to pause. The nudge control self-calibrates linesPerBeat on exit, which
 // is what makes one constant rate actually work (spec §7.2).
+//
+// The beat is shown, not heard: a single beat clock drives a silent 4-beat
+// count-in and then keeps pulsing an on-screen marker in time with the BPM for
+// the whole song, so there's always a beat to lock into — including coming off
+// pause — without any metronome sound.
 export default function PlayScreen({ song, onExit, onCalibrate }) {
   const bpm = song.bpm || 100; // Play always has a tempo; fall back so nothing dead-ends
   const [lpb, setLpb] = useState(song.linesPerBeat || DEFAULT_LINES_PER_BEAT);
   const [phase, setPhase] = useState('countin'); // countin | playing | paused | done
   const [count, setCount] = useState(0);
+  const [pulse, setPulse] = useState(0); // bumped on every beat to re-trigger the flash
 
   const viewRef = useRef(null);
   const contentRef = useRef(null);
@@ -24,7 +30,13 @@ export default function PlayScreen({ song, onExit, onCalibrate }) {
   const lastTsRef = useRef(0);
   const lpbRef = useRef(lpb);
   lpbRef.current = lpb;
+  const phaseRef = useRef('countin');
+  phaseRef.current = phase;
+  const beatTimerRef = useRef(0);
+  const beatNumRef = useRef(0);
 
+  const beatMs = 60000 / bpm;
+  const pulseMs = Math.min(Math.round(beatMs * 0.8), 300);
   const lines = lyricLines(song.lyrics);
 
   // Keep the screen awake for the whole session.
@@ -52,6 +64,11 @@ export default function PlayScreen({ song, onExit, onCalibrate }) {
     if (contentRef.current) contentRef.current.style.transform = `translate3d(0, ${-yRef.current}px, 0)`;
   };
 
+  const stopBeatClock = () => {
+    clearInterval(beatTimerRef.current);
+    beatTimerRef.current = 0;
+  };
+
   const tick = (ts) => {
     if (!lastTsRef.current) lastTsRef.current = ts;
     const dt = (ts - lastTsRef.current) / 1000;
@@ -60,48 +77,77 @@ export default function PlayScreen({ song, onExit, onCalibrate }) {
     if (yRef.current >= maxYRef.current) {
       yRef.current = maxYRef.current;
       apply();
+      stopBeatClock();
       setPhase('done');
+      phaseRef.current = 'done';
       return;
     }
     apply();
     rafRef.current = requestAnimationFrame(tick);
   };
 
-  const startScrolling = () => {
+  const beginScroll = () => {
     lastTsRef.current = 0;
-    setPhase('playing');
     rafRef.current = requestAnimationFrame(tick);
   };
 
-  // The count-in, before the first move and on every resume, so there's always
-  // a beat to lock back into.
-  const runCountIn = () => {
-    setPhase('countin');
+  // One beat clock: four silent count-in beats (1-2-3-4 on screen), then it
+  // keeps running so the pulse marker taps to the BPM for the whole song. Used
+  // on first play and on every resume, so coming off pause is a visual count-in
+  // with no sound.
+  const startBeatClock = () => {
+    stopBeatClock();
+    cancelAnimationFrame(rafRef.current);
+    beatNumRef.current = 0;
     setCount(0);
+    setPhase('countin');
+    phaseRef.current = 'countin';
     measure();
-    countIn(bpm, 4, (n) => setCount(n)).then(() => startScrolling());
+    const fire = () => {
+      beatNumRef.current += 1;
+      const n = beatNumRef.current;
+      setPulse((p) => p + 1);
+      if (n <= 4) setCount(n);
+      if (n === 5) {
+        setPhase('playing');
+        phaseRef.current = 'playing';
+        beginScroll();
+      }
+    };
+    fire(); // first beat immediately
+    beatTimerRef.current = setInterval(fire, beatMs);
   };
+
   useEffect(() => {
-    runCountIn();
-    return () => cancelAnimationFrame(rafRef.current);
+    startBeatClock();
+    return () => {
+      cancelAnimationFrame(rafRef.current);
+      stopBeatClock();
+    };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const pause = () => {
-    if (phase !== 'playing') return;
+    if (phaseRef.current !== 'playing') return;
     cancelAnimationFrame(rafRef.current);
+    stopBeatClock();
     setPhase('paused');
+    phaseRef.current = 'paused';
   };
-  const resume = () => runCountIn();
+  const resume = () => startBeatClock();
   const restart = () => {
     yRef.current = 0;
     apply();
-    runCountIn();
+    startBeatClock();
   };
 
   const nudge = (delta) => setLpb((v) => Math.min(1, Math.max(0.02, v * (1 + delta))));
 
   return (
     <div className="play-root" style={{ position: 'fixed', inset: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      {/* One flash per beat: scale + fade of an accent square, zero corner
+          radius to stay in the design system. Re-keyed by `pulse` each beat. */}
+      <style>{`@keyframes craigBeat{0%{transform:scale(1.9);opacity:1}100%{transform:scale(1);opacity:.28}}`}</style>
+
       {/* top bar */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', zIndex: 3 }}>
         <button onClick={onExit} aria-label="Stop" style={{ width: 44, height: 44, border: 0, background: 'transparent', cursor: 'pointer', display: 'grid', placeItems: 'center', color: '#f3f2f2' }}>
@@ -122,6 +168,15 @@ export default function PlayScreen({ song, onExit, onCalibrate }) {
         {/* the read line */}
         <div style={{ position: 'absolute', top: `${READ_FRACTION * 100}%`, left: 0, right: 0, height: 2, background: 'var(--color-accent)', zIndex: 2, opacity: 0.9 }} />
 
+        {/* the beat pulse — an accent square on the read line that flashes to the
+            BPM the whole time you play, sitting in the left margin clear of the
+            lyric text. */}
+        {phase === 'playing' && (
+          <div style={{ position: 'absolute', top: `${READ_FRACTION * 100}%`, left: 6, transform: 'translateY(-50%)', width: 14, height: 14, zIndex: 3, pointerEvents: 'none' }}>
+            <div key={pulse} style={{ width: '100%', height: '100%', background: 'var(--color-accent)', transformOrigin: 'center', animation: `craigBeat ${pulseMs}ms ease-out both` }} />
+          </div>
+        )}
+
         <div
           ref={contentRef}
           style={{ position: 'absolute', top: 0, left: 0, right: 0, paddingTop: `${READ_FRACTION * 100}%`, paddingBottom: '60vh', willChange: 'transform' }}
@@ -139,10 +194,10 @@ export default function PlayScreen({ song, onExit, onCalibrate }) {
           )}
         </div>
 
-        {/* count-in overlay */}
+        {/* count-in overlay — the number pulses on each silent beat */}
         {phase === 'countin' && (
           <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', zIndex: 4, background: 'rgba(23,21,15,0.72)' }}>
-            <div style={{ fontFamily: 'var(--font-heading)', fontWeight: 800, fontSize: 96, color: 'var(--color-accent)', fontVariantNumeric: 'tabular-nums' }}>
+            <div key={pulse} style={{ fontFamily: 'var(--font-heading)', fontWeight: 800, fontSize: 96, color: 'var(--color-accent)', fontVariantNumeric: 'tabular-nums', transformOrigin: 'center', animation: `craigBeat ${pulseMs}ms ease-out both` }}>
               {count || '·'}
             </div>
           </div>

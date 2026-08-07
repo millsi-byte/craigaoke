@@ -26,48 +26,6 @@ export function linesPerBeatFromDuration(lineCount, durationSec, bpm) {
   return Number.isFinite(v) && v > 0 ? Math.min(1, Math.max(0.02, v)) : null;
 }
 
-// A short click via Web Audio — no files, works offline. Returns a Promise
-// that resolves after the count-in so the caller can start scrolling.
-export function countIn(bpm, beats, onBeat) {
-  return new Promise((resolve) => {
-    let ctx;
-    try {
-      ctx = new (window.AudioContext || window.webkitAudioContext)();
-    } catch {
-      // No audio (rare) — still give the visual count so timing is preserved.
-      let i = 0;
-      const iv = setInterval(() => {
-        i += 1;
-        if (onBeat) onBeat(i);
-        if (i >= beats) {
-          clearInterval(iv);
-          resolve();
-        }
-      }, (60 / bpm) * 1000);
-      return;
-    }
-    const spb = 60 / bpm;
-    const t0 = ctx.currentTime + 0.1;
-    for (let i = 0; i < beats; i += 1) {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      const at = t0 + i * spb;
-      osc.frequency.value = i === 0 ? 1500 : 1000; // first beat accented
-      gain.gain.setValueAtTime(0.0001, at);
-      gain.gain.exponentialRampToValueAtTime(0.5, at + 0.002);
-      gain.gain.exponentialRampToValueAtTime(0.0001, at + 0.05);
-      osc.connect(gain).connect(ctx.destination);
-      osc.start(at);
-      osc.stop(at + 0.06);
-      if (onBeat) setTimeout(() => onBeat(i + 1), (at - ctx.currentTime) * 1000);
-    }
-    setTimeout(() => {
-      ctx.close().catch(() => {});
-      resolve();
-    }, (beats * spb + 0.15) * 1000);
-  });
-}
-
 // Screen Wake Lock (spec §7.4): keep the screen on while playing. Lifted from
 // the recipe app's cook mode — acquire, re-acquire on visibilitychange,
 // release on exit.
